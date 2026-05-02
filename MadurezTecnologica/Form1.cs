@@ -94,7 +94,7 @@ namespace MadurezTecnologica
                 resultado.AppendLine();
 
                 // === 5. LEER TODAS LAS EMPRESAS ===
-                var empresas = repoEmpresa.Obtenertodas();
+                var empresas = repoEmpresa.ObtenerTodas();
                 resultado.AppendLine($"Empresas en BD: {empresas.Count}");
                 foreach (var emp in empresas)
                 {

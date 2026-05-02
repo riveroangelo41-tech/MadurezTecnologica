@@ -18,13 +18,13 @@ namespace MadurezTecnologica.Datos
             cmd.Parameters.AddWithValue("$nombre", empresa.Nombre);
             cmd.Parameters.AddWithValue("$sector", empresa.Sector ?? "");
             cmd.Parameters.AddWithValue("$empleados", empresa.CantidadEmpleados);
-            cmd.Parameters.AddWithValue("$fecha", empresa.FechaRegistro.ToString("0"));
+            cmd.Parameters.AddWithValue("$fecha", empresa.FechaRegistro.ToString("o"));
 
             return Convert.ToInt32(cmd.ExecuteScalar());
 
         }
 
-        public List<Empresa> Obtenertodas () // metodo para obtener los datos de las empresas registradas
+        public List<Empresa> ObtenerTodas() // metodo para obtener los datos de las empresas registradas
         {
 
             var lista = new List<Empresa>(); // se crea la lista
