@@ -11,7 +11,7 @@ namespace MadurezTecnologica
             InitializeComponent();
         }
 
-        private void btnProbar_Click(object sender, EventArgs e)
+        private async void btnProbar_Click(object sender, EventArgs e)
         {
             var resultado = new StringBuilder();
 
@@ -125,13 +125,21 @@ namespace MadurezTecnologica
 
                 resultado.AppendLine();
 
-                // === 8. VERIFICAR CONFIGURACIÓN DE IA ===
+                // === 8. PRIMERA LLAMADA A CLAUDE ===
                 resultado.AppendLine();
-                resultado.AppendLine("===== VERIFICAR IA =====");
-                var clienteIA = new MadurezTecnologica.Inteligencia.ClienteIA();
-                resultado.AppendLine(clienteIA.EstadoActual());
-
-                resultado.AppendLine("===== TODAS LAS PRUEBAS PASARON =====");
+                resultado.AppendLine("===== HABLANDO CON CLAUDE =====");
+                try
+                {
+                    var clienteIA = new MadurezTecnologica.Inteligencia.ClienteIA();
+                    var respuesta = await clienteIA.EnviarMensaje("Hola Claude, soy Angelo. Estoy desarrollando un sistema de evaluación de madurez tecnológica para PYMES. ¿Puedes responderme con un saludo breve?");
+                    resultado.AppendLine("✓ Respuesta recibida:");
+                    resultado.AppendLine();
+                    resultado.AppendLine(respuesta);
+                }
+                catch (Exception ex)
+                {
+                    resultado.AppendLine($"✗ Error al hablar con Claude: {ex.Message}");
+                }
             }
             catch (Exception ex)
             {
