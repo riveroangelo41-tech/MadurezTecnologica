@@ -1,4 +1,5 @@
 ﻿namespace MadurezTecnologica.Modelos
+// Clase que representa el diagnóstico generado por la IA para una conversación específica, con sus resultados y recomendaciones
 {
     public class Diagnostico
     {

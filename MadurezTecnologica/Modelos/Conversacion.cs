@@ -1,5 +1,6 @@
 ﻿namespace MadurezTecnologica.Modelos
 {
+    // Clase que representa una conversación entre el usuario y la IA, con sus mensajes asociados
     public class Conversacion
     {
         public int Id { get; set; }

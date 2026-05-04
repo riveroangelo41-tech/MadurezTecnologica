@@ -1,4 +1,5 @@
 ﻿namespace MadurezTecnologica.Modelos
+// Clase que representa un mensaje dentro de una conversación, con su remitente, contenido, timestamp y orden de aparición
 {
     public class Mensaje
     {

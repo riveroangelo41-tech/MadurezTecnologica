@@ -9,13 +9,19 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="appconfi.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <Folder Include="Logica\" />
-    <Folder Include="Inteligencia\" />
     <Folder Include="Presentacion\" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.7" />
   </ItemGroup>
 
 </Project>

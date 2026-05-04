@@ -124,6 +124,13 @@ namespace MadurezTecnologica
                 }
 
                 resultado.AppendLine();
+
+                // === 8. VERIFICAR CONFIGURACIÓN DE IA ===
+                resultado.AppendLine();
+                resultado.AppendLine("===== VERIFICAR IA =====");
+                var clienteIA = new MadurezTecnologica.Inteligencia.ClienteIA();
+                resultado.AppendLine(clienteIA.EstadoActual());
+
                 resultado.AppendLine("===== TODAS LAS PRUEBAS PASARON =====");
             }
             catch (Exception ex)
