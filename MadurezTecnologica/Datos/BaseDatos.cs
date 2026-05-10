@@ -15,12 +15,15 @@ namespace MadurezTecnologica.Datos
 
             var cmd = conexion.CreateCommand();
             cmd.CommandText = @"
-                CREATE TABLE IF NOT EXISTS Empresas (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    Nombre TEXT NOT NULL,
-                    Sector TEXT NOT NULL,
-                    CantidadEmpleados INTEGER,
-                    FechaRegistro TEXT NOT NULL
+               CREATE TABLE IF NOT EXISTS Empresas (
+                  Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  Nombre TEXT NOT NULL,
+                  Rif TEXT NOT NULL UNIQUE,
+                  Sector TEXT NOT NULL,
+                  CantidadEmpleados INTEGER,
+                  Direccion TEXT NOT NULL,
+                  Telefono TEXT,
+                  FechaRegistro TEXT NOT NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS Conversaciones (

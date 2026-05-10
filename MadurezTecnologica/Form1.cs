@@ -22,8 +22,11 @@ namespace MadurezTecnologica
                 var empresa = new Empresa
                 {
                     Nombre = "Software Solutions C.A.",
+                    Rif = $"J-{DateTime.Now:HHmmssfff}-0",
                     Sector = "Desarrollo de software a medida",
                     CantidadEmpleados = 25,
+                    Direccion = "Av. 5 de Julio, Maracaibo, Zulia",
+                    Telefono = "+58 261-7900000",
                     FechaRegistro = DateTime.Now
                 };
                 int empresaId = repoEmpresa.Guardar(empresa);
@@ -98,7 +101,11 @@ namespace MadurezTecnologica
                 resultado.AppendLine($"Empresas en BD: {empresas.Count}");
                 foreach (var emp in empresas)
                 {
-                    resultado.AppendLine($"  - [{emp.Id}] {emp.Nombre} ({emp.Sector})");
+                    resultado.AppendLine($"  - [{emp.Id}] {emp.Nombre}");
+                    resultado.AppendLine($"    RIF: {emp.Rif} | Sector: {emp.Sector}");
+                    resultado.AppendLine($"    Empleados: {emp.CantidadEmpleados} | Tel: {emp.Telefono}");
+                    resultado.AppendLine($"    Dirección: {emp.Direccion}");
+                    resultado.AppendLine();
                 }
 
                 // === 6. LEER MENSAJES DE LA CONVERSACIÓN ===
@@ -125,20 +132,40 @@ namespace MadurezTecnologica
 
                 resultado.AppendLine();
 
-                // === 8. PRIMERA LLAMADA A CLAUDE ===
+                // === 8. DETECTAR MODO DE OPERACIÓN ===
                 resultado.AppendLine();
-                resultado.AppendLine("===== HABLANDO CON CLAUDE =====");
+                resultado.AppendLine("===== DETECTOR DE CONEXIÓN =====");
                 try
                 {
-                    var clienteIA = new MadurezTecnologica.Inteligencia.ClienteIA();
-                    var respuesta = await clienteIA.EnviarMensaje("Hola Claude, soy Angelo. Estoy desarrollando un sistema de evaluación de madurez tecnológica para PYMES. ¿Puedes responderme con un saludo breve?");
-                    resultado.AppendLine("✓ Respuesta recibida:");
+                    var detector = new MadurezTecnologica.Inteligencia.DetectorConexion();
+
+                    // Probar el modo actual
+                    var modo = await detector.DetectarModo();
+                    resultado.AppendLine($"Modo actual: {modo}");
+                    resultado.AppendLine($"Descripción: {detector.DescribirModo(modo)}");
+
+                    // Probar verificación directa de internet
+                    bool internet = await detector.HayInternet();
+                    resultado.AppendLine($"¿Hay internet?: {internet}");
+
+                    // Probar el modo forzado
                     resultado.AppendLine();
-                    resultado.AppendLine(respuesta);
+                    resultado.AppendLine("--- Activando modo offline forzado ---");
+                    MadurezTecnologica.Inteligencia.DetectorConexion.ActivarModoOfflineForzado();
+                    var modoForzado = await detector.DetectarModo();
+                    resultado.AppendLine($"Modo tras forzar offline: {modoForzado}");
+                    resultado.AppendLine($"Descripción: {detector.DescribirModo(modoForzado)}");
+
+                    // Restaurar modo normal
+                    MadurezTecnologica.Inteligencia.DetectorConexion.DesactivarModoOfflineForzado();
+                    var modoFinal = await detector.DetectarModo();
+                    resultado.AppendLine();
+                    resultado.AppendLine($"--- Modo restaurado ---");
+                    resultado.AppendLine($"Modo final: {modoFinal}");
                 }
                 catch (Exception ex)
                 {
-                    resultado.AppendLine($"✗ Error al hablar con Claude: {ex.Message}");
+                    resultado.AppendLine($"✗ Error en detector: {ex.Message}");
                 }
             }
             catch (Exception ex)
@@ -152,3 +179,5 @@ namespace MadurezTecnologica
         }
     }
 }
+
+
