@@ -132,40 +132,49 @@ namespace MadurezTecnologica
 
                 resultado.AppendLine();
 
-                // === 8. DETECTAR MODO DE OPERACIÓN ===
+                // === 8. EXTRAER TEXTO DE PDF ===
                 resultado.AppendLine();
-                resultado.AppendLine("===== DETECTOR DE CONEXIÓN =====");
+                resultado.AppendLine("===== LECTURA DE PDF =====");
+
+                // IMPORTANTE: cambia esta ruta por la de tu PDF de prueba
+                string rutaPdf = @"C:\Users\Home\Desktop\Nueva carpeta\Diagramas_Sistema_Madurez_Tecnologica_1.pdf";
+
                 try
                 {
-                    var detector = new MadurezTecnologica.Inteligencia.DetectorConexion();
+                    var gestor = new MadurezTecnologica.Logica.GestorInforme();
 
-                    // Probar el modo actual
-                    var modo = await detector.DetectarModo();
-                    resultado.AppendLine($"Modo actual: {modo}");
-                    resultado.AppendLine($"Descripción: {detector.DescribirModo(modo)}");
+                    // Validar que el PDF se puede leer
+                    bool valido = gestor.EsPdfValido(rutaPdf);
+                    resultado.AppendLine($"¿PDF válido?: {valido}");
 
-                    // Probar verificación directa de internet
-                    bool internet = await detector.HayInternet();
-                    resultado.AppendLine($"¿Hay internet?: {internet}");
+                    if (valido)
+                    {
+                        // Mostrar resumen
+                        string resumen = gestor.ObtenerResumen(rutaPdf);
+                        resultado.AppendLine($"Resumen: {resumen}");
 
-                    // Probar el modo forzado
-                    resultado.AppendLine();
-                    resultado.AppendLine("--- Activando modo offline forzado ---");
-                    MadurezTecnologica.Inteligencia.DetectorConexion.ActivarModoOfflineForzado();
-                    var modoForzado = await detector.DetectarModo();
-                    resultado.AppendLine($"Modo tras forzar offline: {modoForzado}");
-                    resultado.AppendLine($"Descripción: {detector.DescribirModo(modoForzado)}");
+                        // Extraer texto completo
+                        string textoPdf = gestor.ExtraerTexto(rutaPdf);
 
-                    // Restaurar modo normal
-                    MadurezTecnologica.Inteligencia.DetectorConexion.DesactivarModoOfflineForzado();
-                    var modoFinal = await detector.DetectarModo();
-                    resultado.AppendLine();
-                    resultado.AppendLine($"--- Modo restaurado ---");
-                    resultado.AppendLine($"Modo final: {modoFinal}");
+                        // Mostrar solo los primeros 500 caracteres para no llenar la pantalla
+                        resultado.AppendLine();
+                        resultado.AppendLine("--- Primeros 500 caracteres del PDF ---");
+                        if (textoPdf.Length > 500)
+                        {
+                            resultado.AppendLine(textoPdf.Substring(0, 500) + "...");
+                        }
+                        else
+                        {
+                            resultado.AppendLine(textoPdf);
+                        }
+
+                        resultado.AppendLine();
+                        resultado.AppendLine($"Total de caracteres extraídos: {textoPdf.Length}");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    resultado.AppendLine($"✗ Error en detector: {ex.Message}");
+                    resultado.AppendLine($"✗ Error al leer PDF: {ex.Message}");
                 }
             }
             catch (Exception ex)
