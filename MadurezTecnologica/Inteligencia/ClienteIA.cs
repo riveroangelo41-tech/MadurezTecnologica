@@ -26,6 +26,9 @@ namespace MadurezTecnologica.Inteligencia
         [JsonPropertyName("max_tokens")]//atributo del número máximo de tokens que se pueden generar en la respuesta
         public int MaxTokens { get; set; }
 
+        [JsonPropertyName("system")] // atributo opcional para incluir el prompt de sistema que define el rol de la IA en toda la conversación
+        public string? System { get; set; }
+
         [JsonPropertyName("messages")]//atributo de la lista de mensajes que se envían a la IA
         public List<MensajeIA> Messages { get; set; } = new List<MensajeIA>();
 
@@ -73,13 +76,14 @@ namespace MadurezTecnologica.Inteligencia
 
         private static readonly HttpClient _httpClient = new HttpClient();
 
-        public async Task<string> EnviarMensaje(string mensajeUsuario)
+        public async Task<string> EnviarMensaje(string mensajeUsuario, string? promptSistema = null)
         {
             // Construir la petición
             var peticion = new PeticionIA
             {
                 Model = _modelo,
                 MaxTokens = _maxTokens,
+                System = promptSistema,
                 Messages = new List<MensajeIA>
         {
             new MensajeIA { Role = "user", Content = mensajeUsuario }
@@ -102,15 +106,14 @@ namespace MadurezTecnologica.Inteligencia
                 throw new Exception($"Error de la API ({response.StatusCode}): {errorBody}");
             }
 
-            // Leer y pasar la respuesta
+            // Leer y parsear la respuesta
             var respuesta = await response.Content.ReadFromJsonAsync<RespuestaIA>();
 
             if (respuesta == null || respuesta.Content.Count == 0)
             {
-                throw new Exception("La respuesta de la API está vacía");
+                throw new Exception("La respuesta de la API vino vacía o mal formada");
             }
 
-            // Devolver el texto del primer bloque
             return respuesta.Content[0].Text;
         }
     }

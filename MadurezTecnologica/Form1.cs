@@ -132,49 +132,54 @@ namespace MadurezTecnologica
 
                 resultado.AppendLine();
 
-                // === 8. EXTRAER TEXTO DE PDF ===
+                // === 8. ANÁLISIS COMPLETO CON IA ===
                 resultado.AppendLine();
-                resultado.AppendLine("===== LECTURA DE PDF =====");
+                resultado.AppendLine("===== ANÁLISIS DEL INFORME CON CLAUDE =====");
 
-                // IMPORTANTE: cambia esta ruta por la de tu PDF de prueba
-                string rutaPdf = @"C:\Users\Home\Desktop\Nueva carpeta\Diagramas_Sistema_Madurez_Tecnologica_1.pdf";
+                // IMPORTANTE: ruta a tu PDF de prueba
+                string rutaPdf = @"C:\Users\Home\Desktop\informe_tecnosoluciones.pdf";
 
                 try
                 {
+                    // Paso 1: Leer el PDF
                     var gestor = new MadurezTecnologica.Logica.GestorInforme();
-
-                    // Validar que el PDF se puede leer
-                    bool valido = gestor.EsPdfValido(rutaPdf);
-                    resultado.AppendLine($"¿PDF válido?: {valido}");
-
-                    if (valido)
+                    if (!gestor.EsPdfValido(rutaPdf))
                     {
-                        // Mostrar resumen
-                        string resumen = gestor.ObtenerResumen(rutaPdf);
-                        resultado.AppendLine($"Resumen: {resumen}");
-
-                        // Extraer texto completo
-                        string textoPdf = gestor.ExtraerTexto(rutaPdf);
-
-                        // Mostrar solo los primeros 500 caracteres para no llenar la pantalla
-                        resultado.AppendLine();
-                        resultado.AppendLine("--- Primeros 500 caracteres del PDF ---");
-                        if (textoPdf.Length > 500)
-                        {
-                            resultado.AppendLine(textoPdf.Substring(0, 500) + "...");
-                        }
-                        else
-                        {
-                            resultado.AppendLine(textoPdf);
-                        }
-
-                        resultado.AppendLine();
-                        resultado.AppendLine($"Total de caracteres extraídos: {textoPdf.Length}");
+                        resultado.AppendLine("✗ El PDF no es válido o no existe");
+                        return;
                     }
+
+                    string textoInforme = gestor.ExtraerTexto(rutaPdf);
+                    resultado.AppendLine($"✓ PDF leído: {textoInforme.Length} caracteres");
+
+                    // Paso 2: Construir el prompt
+                    var constructor = new MaturezTecnologica.Inteligencia.ConstructorPrompt();
+                    string promptSistema = constructor.PromptSistema();
+                    string promptAnalisis = constructor.PromptAnalisisInforme(
+                        textoInforme,
+                        "TecnoSoluciones Andinas, C.A.",
+                         "Desarrollo de software a medida"
+                    );
+
+                    resultado.AppendLine($"✓ Prompts construidos");
+                    resultado.AppendLine($"   - Prompt de sistema: {promptSistema.Length} caracteres");
+                    resultado.AppendLine($"   - Prompt de análisis: {promptAnalisis.Length} caracteres");
+
+                    // Paso 3: Enviar a Claude con el prompt de sistema
+                    resultado.AppendLine();
+                    resultado.AppendLine("Esperando respuesta de Claude (puede tardar 10-20 segundos)...");
+
+                    var clienteIA = new MadurezTecnologica.Inteligencia.ClienteIA();
+                    string respuestaClaude = await clienteIA.EnviarMensaje(promptAnalisis, promptSistema);
+
+                    // Paso 4: Mostrar la respuesta
+                    resultado.AppendLine();
+                    resultado.AppendLine("--- RESPUESTA DE CLAUDE ---");
+                    resultado.AppendLine(respuestaClaude);
                 }
                 catch (Exception ex)
                 {
-                    resultado.AppendLine($"✗ Error al leer PDF: {ex.Message}");
+                    resultado.AppendLine($"✗ Error: {ex.Message}");
                 }
             }
             catch (Exception ex)
