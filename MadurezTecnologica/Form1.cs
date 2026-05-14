@@ -132,66 +132,133 @@ namespace MadurezTecnologica
 
                 resultado.AppendLine();
 
-                // === 8. ANÁLISIS COMPLETO CON IA ===
+                // === 8. BATERÍA DE PRUEBAS DEL ORQUESTADOR ===
                 resultado.AppendLine();
-                resultado.AppendLine("===== ANÁLISIS DEL INFORME CON CLAUDE =====");
+                resultado.AppendLine("===== BATERÍA DE PRUEBAS - SEMANA 2 =====");
+                txtResultado.Text = resultado.ToString();
+                txtResultado.Refresh();
 
-                // IMPORTANTE: ruta a tu PDF de prueba
-                string rutaPdf = @"C:\Users\Home\Desktop\informe_tecnosoluciones.pdf";
+                // Ruta del PDF de prueba (declarada una sola vez)
+                string rutaPdfPrueba = @"C:\Users\Home\Desktop\informe_codeminka_corto.pdf";
+
+                var orquestador = new MadurezTecnologica.Logica.OrquestadorAnalisis();
+
+                // ----- PRUEBA 1: Caso normal con PDF válido -----
+                resultado.AppendLine();
+                resultado.AppendLine("--- PRUEBA 1: Análisis normal ---");
+                txtResultado.Text = resultado.ToString();
+                txtResultado.Refresh();
 
                 try
                 {
-                    // Paso 1: Leer el PDF
-                    var gestor = new MadurezTecnologica.Logica.GestorInforme();
-                    if (!gestor.EsPdfValido(rutaPdf))
+                    var empresa1 = new MadurezTecnologica.Modelos.Empresa
                     {
-                        resultado.AppendLine("✗ El PDF no es válido o no existe");
-                        return;
+                        Nombre = "CodeMinka, C.A.",
+                        Sector = "Desarrollo de aplicaciones móviles"
+                    };
+
+                    var analisis1 = await orquestador.AnalizarInformePdf(rutaPdfPrueba, empresa1);
+
+                    resultado.AppendLine($"Modo: {analisis1.ModoUsado}");
+                    resultado.AppendLine($"Exitoso: {analisis1.Exitoso}");
+                    resultado.AppendLine($"Caracteres procesados: {analisis1.CaracteresProcesados}");
+
+                    if (analisis1.Exitoso)
+                    {
+                        string preview = analisis1.TextoAnalisis.Length > 300
+                            ? analisis1.TextoAnalisis.Substring(0, 300) + "..."
+                            : analisis1.TextoAnalisis;
+                        resultado.AppendLine($"Preview: {preview}");
                     }
-
-                    string textoInforme = gestor.ExtraerTexto(rutaPdf);
-                    resultado.AppendLine($"✓ PDF leído: {textoInforme.Length} caracteres");
-
-                    // Paso 2: Construir el prompt
-                    var constructor = new MaturezTecnologica.Inteligencia.ConstructorPrompt();
-                    string promptSistema = constructor.PromptSistema();
-                    string promptAnalisis = constructor.PromptAnalisisInforme(
-                        textoInforme,
-                        "TecnoSoluciones Andinas, C.A.",
-                         "Desarrollo de software a medida"
-                    );
-
-                    resultado.AppendLine($"✓ Prompts construidos");
-                    resultado.AppendLine($"   - Prompt de sistema: {promptSistema.Length} caracteres");
-                    resultado.AppendLine($"   - Prompt de análisis: {promptAnalisis.Length} caracteres");
-
-                    // Paso 3: Enviar a Claude con el prompt de sistema
-                    resultado.AppendLine();
-                    resultado.AppendLine("Esperando respuesta de Claude (puede tardar 10-20 segundos)...");
-
-                    var clienteIA = new MadurezTecnologica.Inteligencia.ClienteIA();
-                    string respuestaClaude = await clienteIA.EnviarMensaje(promptAnalisis, promptSistema);
-
-                    // Paso 4: Mostrar la respuesta
-                    resultado.AppendLine();
-                    resultado.AppendLine("--- RESPUESTA DE CLAUDE ---");
-                    resultado.AppendLine(respuestaClaude);
+                    else
+                    {
+                        resultado.AppendLine($"Mensaje: {analisis1.Mensaje}");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    resultado.AppendLine($"✗ Error: {ex.Message}");
+                    resultado.AppendLine($"Error inesperado: {ex.Message}");
                 }
+
+                txtResultado.Text = resultado.ToString();
+                txtResultado.Refresh();
+
+                // ----- PRUEBA 2: PDF inexistente -----
+                resultado.AppendLine();
+                resultado.AppendLine("--- PRUEBA 2: PDF con ruta inválida ---");
+                txtResultado.Text = resultado.ToString();
+                txtResultado.Refresh();
+
+                try
+                {
+                    var empresa2 = new MadurezTecnologica.Modelos.Empresa
+                    {
+                        Nombre = "Empresa Fantasma",
+                        Sector = "Test"
+                    };
+
+                    var analisis2 = await orquestador.AnalizarInformePdf(
+                        @"C:\Ruta\Que\No\Existe\fantasma.pdf",
+                        empresa2
+                    );
+
+                    resultado.AppendLine($"Modo: {analisis2.ModoUsado}");
+                    resultado.AppendLine($"Exitoso: {analisis2.Exitoso}");
+                    resultado.AppendLine($"Mensaje: {analisis2.Mensaje}");
+                }
+                catch (Exception ex)
+                {
+                    resultado.AppendLine($"Error inesperado: {ex.Message}");
+                }
+
+                txtResultado.Text = resultado.ToString();
+                txtResultado.Refresh();
+
+                // ----- PRUEBA 3: Modo offline forzado -----
+                resultado.AppendLine();
+                resultado.AppendLine("--- PRUEBA 3: Modo offline forzado ---");
+                txtResultado.Text = resultado.ToString();
+                txtResultado.Refresh();
+
+                try
+                {
+                    // Forzar offline
+                    MadurezTecnologica.Inteligencia.DetectorConexion.ActivarModoOfflineForzado();
+
+                    var empresa3 = new MadurezTecnologica.Modelos.Empresa
+                    {
+                        Nombre = "CodeMinka, C.A.",
+                        Sector = "Desarrollo de aplicaciones móviles"
+                    };
+
+                    var analisis3 = await orquestador.AnalizarInformePdf(rutaPdfPrueba, empresa3);
+
+                    resultado.AppendLine($"Modo: {analisis3.ModoUsado}");
+                    resultado.AppendLine($"Exitoso: {analisis3.Exitoso}");
+                    resultado.AppendLine($"Mensaje: {analisis3.Mensaje}");
+
+                    // Restaurar modo normal
+                    MadurezTecnologica.Inteligencia.DetectorConexion.DesactivarModoOfflineForzado();
+                }
+                catch (Exception ex)
+                {
+                    resultado.AppendLine($"Error inesperado: {ex.Message}");
+                }
+
+                // ----- RESUMEN FINAL -----
+                resultado.AppendLine();
+                resultado.AppendLine("===== FIN DE PRUEBAS =====");
+                txtResultado.Text = resultado.ToString();
             }
             catch (Exception ex)
             {
-                resultado.AppendLine();
-                resultado.AppendLine($"✗ ERROR: {ex.Message}");
-                resultado.AppendLine($"Tipo: {ex.GetType().Name}");
+                // Manejo general para el try principal
+                resultado.AppendLine($"Error inesperado: {ex.Message}");
+                txtResultado.Text = resultado.ToString();
             }
-
-            txtResultado.Text = resultado.ToString();
         }
     }
 }
+
 
 

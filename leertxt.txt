@@ -1,0 +1,51 @@
+ # Sistema de Evaluación de Madurez Tecnológica para PYMES
+
+Sistema híbrido (online/offline) que evalúa el nivel de madurez tecnológica
+de pequeñas y medianas empresas del sector desarrollo de software,
+utilizando los marcos de referencia CMMI, COBIT, ISO 25010 e ITIL.
+
+## Tecnologías
+
+- **.NET 8** (Windows Forms)
+- **C# 12**
+- **SQLite** para persistencia local
+- **PdfPig** para lectura de PDFs
+- **API de Anthropic Claude Sonnet 4.6** para análisis inteligente
+
+## Arquitectura
+
+Arquitectura por capas:
+
+- `Presentacion/`: formularios Windows Forms
+- `Logica/`: orquestadores y gestores de negocio
+- `Inteligencia/`: cliente IA, prompts, detector de conexión, motor de reglas (offline)
+- `Datos/`: base de datos SQLite y repositorios
+- `Modelos/`: entidades del dominio
+
+## Modos de operación
+
+- **Online**: utiliza Claude Sonnet 4.6 para análisis profundo y conversación
+- **Offline**: motor de reglas + cuestionario estructurado (en desarrollo)
+
+El sistema detecta automáticamente la disponibilidad de internet
+y selecciona el modo apropiado. El usuario también puede forzar
+el modo offline manualmente.
+
+## Configuración
+
+1. Obtener una API Key de Anthropic en console.anthropic.com
+2. Crear el archivo `appconfi.json` en la raíz del proyecto con:
+
+```json
+{
+  "ApiKey": "sk-ant-api03-...",
+  "Modelo": "claude-sonnet-4-6",
+  "MaxTokens": 4000
+}
+```
+
+3. Compilar y ejecutar con Visual Studio 2022 o superior.
+
+## Autor
+
+Angelo Rivero — Trabajo de grado, 2026

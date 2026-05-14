@@ -1,4 +1,4 @@
-﻿namespace MaturezTecnologica.Inteligencia
+﻿namespace MadurezTecnologica.Inteligencia
 {
     public class ConstructorPrompt // Clase encargada de construir los prompts para interactuar con Claude
     {
