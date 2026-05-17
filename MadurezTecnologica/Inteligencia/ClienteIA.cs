@@ -26,7 +26,8 @@ namespace MadurezTecnologica.Inteligencia
         [JsonPropertyName("max_tokens")]//atributo del número máximo de tokens que se pueden generar en la respuesta
         public int MaxTokens { get; set; }
 
-        [JsonPropertyName("system")] // atributo opcional para incluir el prompt de sistema que define el rol de la IA en toda la conversación
+        [JsonPropertyName("system")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? System { get; set; }
 
         [JsonPropertyName("messages")]//atributo de la lista de mensajes que se envían a la IA

@@ -160,15 +160,28 @@ namespace MadurezTecnologica
                     var analisis1 = await orquestador.AnalizarInformePdf(rutaPdfPrueba, empresa1);
 
                     resultado.AppendLine($"Modo: {analisis1.ModoUsado}");
+                    resultado.AppendLine($"Método validación: {analisis1.MetodoValidacion}");
                     resultado.AppendLine($"Exitoso: {analisis1.Exitoso}");
                     resultado.AppendLine($"Caracteres procesados: {analisis1.CaracteresProcesados}");
 
-                    if (analisis1.Exitoso)
+                    if (analisis1.Exitoso && analisis1.Diagnostico != null)
                     {
-                        string preview = analisis1.TextoAnalisis.Length > 300
-                            ? analisis1.TextoAnalisis.Substring(0, 300) + "..."
-                            : analisis1.TextoAnalisis;
-                        resultado.AppendLine($"Preview: {preview}");
+                        var diag = analisis1.Diagnostico;
+                        resultado.AppendLine();
+                        resultado.AppendLine("--- DIAGNÓSTICO PARSEADO ---");
+                        resultado.AppendLine($"Nivel de madurez: {diag.NivelMadurez}");
+                        resultado.AppendLine();
+                        resultado.AppendLine("FORTALEZAS:");
+                        resultado.AppendLine(RecortarTexto(diag.Fortalezas, 250));
+                        resultado.AppendLine();
+                        resultado.AppendLine("DEBILIDADES:");
+                        resultado.AppendLine(RecortarTexto(diag.Debilidades, 250));
+                        resultado.AppendLine();
+                        resultado.AppendLine("RIESGOS:");
+                        resultado.AppendLine(RecortarTexto(diag.Riesgos, 250));
+                        resultado.AppendLine();
+                        resultado.AppendLine("RECOMENDACIONES:");
+                        resultado.AppendLine(RecortarTexto(diag.Recomendaciones, 250));
                     }
                     else
                     {
@@ -244,6 +257,34 @@ namespace MadurezTecnologica
                 {
                     resultado.AppendLine($"Error inesperado: {ex.Message}");
                 }
+                // ----- PRUEBA 4: PDF que NO corresponde a la empresa registrada -----
+                resultado.AppendLine();
+                resultado.AppendLine("--- PRUEBA 4: Coherencia PDF-Empresa ---");
+                txtResultado.Text = resultado.ToString();
+                txtResultado.Refresh();
+
+                try
+                {
+                    // Registramos una empresa DIFERENTE a la del PDF
+                    var empresaIncorrecta = new MadurezTecnologica.Modelos.Empresa
+                    {
+                        Nombre = "OtraEmpresa Distinta, C.A.",
+                        Sector = "Otro sector cualquiera"
+                    };
+
+                    // Subimos el PDF de CodeMinka pero registramos OtraEmpresa
+                    var analisis4 = await orquestador.AnalizarInformePdf(rutaPdfPrueba, empresaIncorrecta);
+
+                    resultado.AppendLine($"Modo: {analisis4.ModoUsado}");
+                    resultado.AppendLine($"Método validación: {analisis4.MetodoValidacion}");
+                    resultado.AppendLine($"Exitoso: {analisis4.Exitoso}");
+                    resultado.AppendLine($"Mensaje: {analisis4.Mensaje}");
+                }
+                catch (Exception ex)
+                {
+                    resultado.AppendLine($"Error inesperado: {ex.Message}");
+                }
+
 
                 // ----- RESUMEN FINAL -----
                 resultado.AppendLine();
@@ -257,6 +298,13 @@ namespace MadurezTecnologica
                 txtResultado.Text = resultado.ToString();
             }
         }
+        private string RecortarTexto(string texto, int maxCaracteres)
+        {
+            if (string.IsNullOrEmpty(texto)) return "(sin contenido)";
+            if (texto.Length <= maxCaracteres) return texto;
+            return texto.Substring(0, maxCaracteres) + "...";
+        }
+
     }
 }
 

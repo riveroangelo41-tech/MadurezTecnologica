@@ -40,7 +40,6 @@ NIVELES CMMI DE REFERENCIA:
 - Nivel 5 (Optimizado): mejora continua basada en datos";
         }
 
-        // Prompt para analizar un informe empresarial completo
         public string PromptAnalisisInforme(string textoInforme, string nombreEmpresa, string sector)
         {
             return $@"Necesito que analices el siguiente informe empresarial y determines su nivel de madurez tecnológica.
@@ -54,22 +53,44 @@ CONTENIDO DEL INFORME:
 {textoInforme}
 ---
 
-INSTRUCCIONES DE ANÁLISIS:
-Estructura tu respuesta con las siguientes secciones, en este orden:
+REGLAS ESTRICTAS DE FORMATO (obligatorias):
+- NO uses formato Markdown: nada de **negritas**, ## títulos, tablas, líneas separadoras (---)
+- NO uses emojis ni íconos decorativos (🔴, ✅, etc.)
+- NO añadas texto introductorio antes de cada sección
+- Cada sección debe iniciar DIRECTAMENTE con el número y título indicados
+- Las listas usan guión simple ""-"" al inicio de cada elemento
+- Texto plano, profesional, sin adornos visuales
 
-1. NIVEL DE MADUREZ: indica un número del 1 al 5 según CMMI con una justificación breve (2-3 líneas)
+ESTRUCTURA OBLIGATORIA DE LA RESPUESTA (sigue exactamente este formato):
 
-2. FORTALEZAS: lista 3 a 5 puntos fuertes identificados en el informe, cada uno con su evidencia textual
+1. NIVEL DE MADUREZ: [número del 1 al 5]
+[Justificación de 2 a 3 líneas en texto plano]
 
-3. DEBILIDADES: lista 3 a 5 debilidades o áreas críticas, cada una con su evidencia textual
+2. FORTALEZAS:
+- [Fortaleza 1]: [Evidencia textual del informe]
+- [Fortaleza 2]: [Evidencia textual del informe]
+- [Fortaleza 3]: [Evidencia textual del informe]
 
-4. RIESGOS: identifica los 3 riesgos más significativos para la operación
+3. DEBILIDADES:
+- [Debilidad 1]: [Evidencia textual del informe]
+- [Debilidad 2]: [Evidencia textual del informe]
+- [Debilidad 3]: [Evidencia textual del informe]
 
-5. RECOMENDACIONES: propón 3 a 5 acciones concretas y priorizadas para subir un nivel CMMI
+4. RIESGOS:
+- [Riesgo 1]: [Descripción del impacto y probabilidad]
+- [Riesgo 2]: [Descripción del impacto y probabilidad]
+- [Riesgo 3]: [Descripción del impacto y probabilidad]
 
-6. PREGUNTAS PARA EL USUARIO: si hay información faltante o ambigua, formula 2 a 3 preguntas para refinar el análisis
+5. RECOMENDACIONES:
+- [Recomendación 1]: [Acción concreta y priorizada]
+- [Recomendación 2]: [Acción concreta y priorizada]
+- [Recomendación 3]: [Acción concreta y priorizada]
 
-Sé específico, justificado y técnico. Si el informe es insuficiente o no contiene información sobre madurez tecnológica, indícalo en lugar de inventar conclusiones.";
+6. PREGUNTAS PARA EL USUARIO:
+- [Pregunta 1]
+- [Pregunta 2]
+
+Sé específico, justificado y técnico. Si el informe es insuficiente, indícalo en la sección correspondiente en lugar de inventar conclusiones.";
         }
 
         // Prompt para una conversación de seguimiento (después del análisis inicial)
@@ -87,5 +108,30 @@ El usuario puede pedirte:
 
 Mantén la coherencia con el análisis previo y ajusta el nivel diagnosticado solo si surge información nueva relevante.";
         }
+
+        // Prompt para validar si un texto corresponde a una empresa determinada
+        public string PromptValidacionCoherencia(string textoInforme, string nombreEmpresa, string sector)
+        {
+            // Recortar el texto si es muy largo para ahorrar tokens
+            string textoRecortado = textoInforme.Length > 1500
+                ? textoInforme.Substring(0, 1500) + "..."
+                : textoInforme;
+
+            return $@"Analiza el siguiente fragmento de texto y determina si corresponde a un informe empresarial de la empresa indicada.
+
+EMPRESA REGISTRADA: {nombreEmpresa}
+SECTOR: {sector}
+
+FRAGMENTO DEL INFORME:
+---
+{textoRecortado}
+---
+
+Responde EXCLUSIVAMENTE con una sola palabra, sin explicaciones ni puntuación adicional:
+- SI (si el texto claramente corresponde a la empresa indicada)
+- NO (si el texto corresponde a una empresa diferente, o no es un informe empresarial)";
+        }
+
+
     }
 }
