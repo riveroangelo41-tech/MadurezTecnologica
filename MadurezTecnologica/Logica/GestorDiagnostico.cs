@@ -89,8 +89,8 @@ namespace MadurezTecnologica.Logica
             }
         }
 
-        // Realiza el diagnóstico completo del informe (llama a Claude con el prompt experto)
-        public async Task<Diagnostico> RealizarDiagnostico(string textoInforme, Empresa empresa)
+        // Realiza el diagnóstico completo utilizando Claude, devuelve el diagnóstico estructurado y el texto crudo de la respuesta
+        public async Task<(Diagnostico diagnostico, string textoCrudo)> RealizarDiagnostico(string textoInforme, Empresa empresa)
         {
             string promptSistema = _constructorPrompt.PromptSistema();
             string promptAnalisis = _constructorPrompt.PromptAnalisisInforme(
@@ -99,12 +99,10 @@ namespace MadurezTecnologica.Logica
                 empresa.Sector
             );
 
-            string respuestaTexto = await _clienteIA.EnviarMensaje(promptAnalisis, promptSistema); // Se puede usar un prompt de sistema para dar instrucciones generales a Claude, y luego el prompt específico del análisis
+            string textoCrudo = await _clienteIA.EnviarMensaje(promptAnalisis, promptSistema);
+            Diagnostico diagnostico = ParsearRespuesta(textoCrudo); // El método ParsearRespuesta se encarga de extraer el nivel de madurez, fortalezas, debilidades, riesgos y recomendaciones del texto crudo devuelto por Claude
 
-            // Parsear la respuesta a objeto estructurado
-            Diagnostico diagnostico = ParsearRespuesta(respuestaTexto);
-
-            return diagnostico;
+            return (diagnostico, textoCrudo); // Devuelve tanto el diagnóstico estructurado como el texto crudo para que pueda ser almacenado o revisado posteriormente
         }
 
         // Normaliza un texto: minúsculas, sin acentos, sin espacios extras
@@ -159,6 +157,7 @@ namespace MadurezTecnologica.Logica
             {
                 FechaGeneracion = DateTime.Now,
                 EsFinal = false,
+                ResumenEmpresa = LimpiarMarkdown(ExtraerSeccion(textoClaude, "RESUMEN DE LA EMPRESA", "NIVEL DE MADUREZ")),
                 NivelMadurez = ExtraerNivel(textoClaude),
                 Fortalezas = LimpiarMarkdown(ExtraerSeccion(textoClaude, "FORTALEZAS", "DEBILIDADES")),
                 Debilidades = LimpiarMarkdown(ExtraerSeccion(textoClaude, "DEBILIDADES", "RIESGOS")),

@@ -48,16 +48,17 @@ namespace MadurezTecnologica.Datos
                 CREATE TABLE IF NOT EXISTS Diagnosticos (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
                     ConversacionId INTEGER NOT NULL,
-                    NivelMadurez INTEGER NOT NULL,
+                    ResumenEmpresa TEXT,
+                    NivelMadurez INTEGER,
                     Fortalezas TEXT,
                     Debilidades TEXT,
                     Riesgos TEXT,
                     Recomendaciones TEXT,
                     FechaGeneracion TEXT NOT NULL,
-                    EsFinal INTEGER NOT NULL,
+                    EsFinal INTEGER NOT NULL DEFAULT 0,
                     FOREIGN KEY (ConversacionId) REFERENCES Conversaciones(Id)
                 );
-            ";
+               ";
             cmd.ExecuteNonQuery();
         }
     }

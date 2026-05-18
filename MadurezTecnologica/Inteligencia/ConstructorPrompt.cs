@@ -63,30 +63,33 @@ REGLAS ESTRICTAS DE FORMATO (obligatorias):
 
 ESTRUCTURA OBLIGATORIA DE LA RESPUESTA (sigue exactamente este formato):
 
-1. NIVEL DE MADUREZ: [número del 1 al 5]
+1. RESUMEN DE LA EMPRESA:
+[Párrafo de 4 a 6 líneas describiendo qué hace la empresa, su tamaño, sector, productos principales y características generales que identificaste del informe. Sé descriptivo y objetivo.]
+
+2. NIVEL DE MADUREZ: [número del 1 al 5]
 [Justificación de 2 a 3 líneas en texto plano]
 
-2. FORTALEZAS:
+3. FORTALEZAS:
 - [Fortaleza 1]: [Evidencia textual del informe]
 - [Fortaleza 2]: [Evidencia textual del informe]
 - [Fortaleza 3]: [Evidencia textual del informe]
 
-3. DEBILIDADES:
+4. DEBILIDADES:
 - [Debilidad 1]: [Evidencia textual del informe]
 - [Debilidad 2]: [Evidencia textual del informe]
 - [Debilidad 3]: [Evidencia textual del informe]
 
-4. RIESGOS:
+5. RIESGOS:
 - [Riesgo 1]: [Descripción del impacto y probabilidad]
 - [Riesgo 2]: [Descripción del impacto y probabilidad]
 - [Riesgo 3]: [Descripción del impacto y probabilidad]
 
-5. RECOMENDACIONES:
+6. RECOMENDACIONES:
 - [Recomendación 1]: [Acción concreta y priorizada]
 - [Recomendación 2]: [Acción concreta y priorizada]
 - [Recomendación 3]: [Acción concreta y priorizada]
 
-6. PREGUNTAS PARA EL USUARIO:
+7. PREGUNTAS PARA EL USUARIO:
 - [Pregunta 1]
 - [Pregunta 2]
 

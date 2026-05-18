@@ -139,7 +139,7 @@ namespace MadurezTecnologica
                 txtResultado.Refresh();
 
                 // Ruta del PDF de prueba (declarada una sola vez)
-                string rutaPdfPrueba = @"C:\Users\Home\Desktop\informe_codeminka_corto.pdf";
+                string rutaPdfPrueba = @"C:\Users\Home\Desktop\plantilla_codeminka_llenada.pdf";
 
                 var orquestador = new MadurezTecnologica.Logica.OrquestadorAnalisis();
 
@@ -154,7 +154,11 @@ namespace MadurezTecnologica
                     var empresa1 = new MadurezTecnologica.Modelos.Empresa
                     {
                         Nombre = "CodeMinka, C.A.",
-                        Sector = "Desarrollo de aplicaciones móviles"
+                        Rif = "J-40128765-3",
+                        Sector = "Desarrollo de aplicaciones móviles",
+                        CantidadEmpleados = 8,
+                        Direccion = "Av. Francisco de Miranda, Caracas",
+                        Telefono = "+58 212-5552345"
                     };
 
                     var analisis1 = await orquestador.AnalizarInformePdf(rutaPdfPrueba, empresa1);
@@ -169,6 +173,10 @@ namespace MadurezTecnologica
                         var diag = analisis1.Diagnostico;
                         resultado.AppendLine();
                         resultado.AppendLine("--- DIAGNÓSTICO PARSEADO ---");
+                        resultado.AppendLine();
+                        resultado.AppendLine("RESUMEN DE LA EMPRESA:");
+                        resultado.AppendLine(RecortarTexto(diag.ResumenEmpresa, 500));
+                        resultado.AppendLine();
                         resultado.AppendLine($"Nivel de madurez: {diag.NivelMadurez}");
                         resultado.AppendLine();
                         resultado.AppendLine("FORTALEZAS:");
@@ -186,6 +194,15 @@ namespace MadurezTecnologica
                     else
                     {
                         resultado.AppendLine($"Mensaje: {analisis1.Mensaje}");
+                    }
+
+                    if (analisis1.PersistidoEnBD)
+                    {
+                        resultado.AppendLine();
+                        resultado.AppendLine("--- PERSISTENCIA EN BD ---");
+                        resultado.AppendLine($"EmpresaId: {analisis1.EmpresaId}");
+                        resultado.AppendLine($"ConversacionId: {analisis1.ConversacionId}");
+                        resultado.AppendLine($"DiagnosticoId: {analisis1.DiagnosticoId}");
                     }
                 }
                 catch (Exception ex)
@@ -269,7 +286,11 @@ namespace MadurezTecnologica
                     var empresaIncorrecta = new MadurezTecnologica.Modelos.Empresa
                     {
                         Nombre = "OtraEmpresa Distinta, C.A.",
-                        Sector = "Otro sector cualquiera"
+                        Rif = "J-99999999-9",
+                        Sector = "Otro sector cualquiera",
+                        CantidadEmpleados = 50,
+                        Direccion = "Otra dirección cualquiera",
+                        Telefono = "+58 000-0000000"
                     };
 
                     // Subimos el PDF de CodeMinka pero registramos OtraEmpresa
@@ -284,7 +305,30 @@ namespace MadurezTecnologica
                 {
                     resultado.AppendLine($"Error inesperado: {ex.Message}");
                 }
+                // ----- PRUEBA 5: Generación de plantilla Word -----
+                resultado.AppendLine();
+                resultado.AppendLine("--- PRUEBA 5: Generación de plantilla ---");
+                txtResultado.Text = resultado.ToString();
+                txtResultado.Refresh();
 
+                try
+                {
+                    var generador = new MadurezTecnologica.Logica.GeneradorPlantilla();
+
+                    // Guardar la plantilla en el escritorio
+                    string rutaEscritorio = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                    string nombreArchivo = $"plantilla_madurez_{DateTime.Now:yyyyMMdd_HHmmss}.docx";
+                    string rutaSalida = System.IO.Path.Combine(rutaEscritorio, nombreArchivo);
+
+                    string archivoGenerado = generador.GenerarPlantilla(rutaSalida);
+
+                    resultado.AppendLine($"✓ Plantilla generada: {archivoGenerado}");
+                    resultado.AppendLine($"Tamaño: {new System.IO.FileInfo(archivoGenerado).Length} bytes");
+                }
+                catch (Exception ex)
+                {
+                    resultado.AppendLine($"✗ Error al generar plantilla: {ex.Message}");
+                }
 
                 // ----- RESUMEN FINAL -----
                 resultado.AppendLine();

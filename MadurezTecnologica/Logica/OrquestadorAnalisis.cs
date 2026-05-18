@@ -1,4 +1,5 @@
-﻿using MadurezTecnologica.Inteligencia;
+﻿using MadurezTecnologica.Datos;
+using MadurezTecnologica.Inteligencia;
 using MadurezTecnologica.Modelos;
 
 namespace MadurezTecnologica.Logica
@@ -13,6 +14,12 @@ namespace MadurezTecnologica.Logica
         public int CaracteresProcesados { get; set; }
         public DateTime FechaAnalisis { get; set; }
         public string MetodoValidacion { get; set; } = "";
+
+        // Nuevas propiedades para persistencia
+        public bool PersistidoEnBD { get; set; }
+        public int? EmpresaId { get; set; }
+        public int? ConversacionId { get; set; }
+        public int? DiagnosticoId { get; set; }
     }
 
     public class OrquestadorAnalisis
@@ -20,14 +27,22 @@ namespace MadurezTecnologica.Logica
         private readonly GestorInforme _gestorInforme;
         private readonly GestorDiagnostico _gestorDiagnostico;
         private readonly DetectorConexion _detectorConexion;
+        private readonly RepositorioEmpresa _repoEmpresa;
+        private readonly RepositorioConversacion _repoConversacion;
+        private readonly RepositorioMensaje _repoMensaje;
+        private readonly RepositorioDiagnostico _repoDiagnostico;
 
         public OrquestadorAnalisis()
         {
             _gestorInforme = new GestorInforme();
             _gestorDiagnostico = new GestorDiagnostico();
             _detectorConexion = new DetectorConexion();
+            _repoEmpresa = new RepositorioEmpresa();
+            _repoConversacion = new RepositorioConversacion();
+            _repoMensaje = new RepositorioMensaje();
+            _repoDiagnostico = new RepositorioDiagnostico();
         }
-        // Método principal para analizar un informe PDF, que coordina todos los pasos del proceso de análisis
+
         public async Task<ResultadoAnalisis> AnalizarInformePdf(string rutaPdf, Empresa empresa)
         {
             var resultado = new ResultadoAnalisis
@@ -37,7 +52,7 @@ namespace MadurezTecnologica.Logica
 
             try
             {
-                // PASO 1: Validar que el PDF se puede leer
+                // PASO 1: Validar PDF
                 if (!_gestorInforme.EsPdfValido(rutaPdf))
                 {
                     resultado.Exitoso = false;
@@ -45,7 +60,7 @@ namespace MadurezTecnologica.Logica
                     return resultado;
                 }
 
-                // PASO 2: Detectar modo de operación
+                // PASO 2: Detectar modo
                 var modo = await _detectorConexion.DetectarModo();
                 resultado.ModoUsado = modo;
 
@@ -70,7 +85,7 @@ namespace MadurezTecnologica.Logica
                     return resultado;
                 }
 
-                // PASO 5: Validar coherencia entre PDF y empresa registrada
+                // PASO 5: Validar coherencia
                 var validacion = await _gestorDiagnostico.ValidarCoherenciaPDF(textoInforme, empresa);
                 resultado.MetodoValidacion = validacion.MetodoUsado;
 
@@ -80,13 +95,17 @@ namespace MadurezTecnologica.Logica
                     resultado.Mensaje = $"El informe no corresponde a la empresa registrada ({empresa.Nombre}). {validacion.Mensaje}";
                     return resultado;
                 }
-                // PASO 6: Realizar el diagnóstico con Claude
-                Diagnostico diagnostico = await _gestorDiagnostico.RealizarDiagnostico(textoInforme, empresa);
+
+                // PASO 6: Realizar el diagnóstico con Claude (texto crudo + estructurado)
+                var (diagnostico, textoCrudo) = await _gestorDiagnostico.RealizarDiagnostico(textoInforme, empresa);
+
+                // PASO 7: Persistir todo en la BD
+                PersistirAnalisis(empresa, rutaPdf, textoCrudo, diagnostico, resultado);
 
                 resultado.Exitoso = true;
-                resultado.Mensaje = $"Análisis completado. Validación: {validacion.Mensaje}";
+                resultado.Mensaje = $"Análisis completado y guardado en BD. Validación: {validacion.Mensaje}";
+                resultado.TextoAnalisis = textoCrudo;
                 resultado.Diagnostico = diagnostico;
-                resultado.TextoAnalisis = $"Nivel: {diagnostico.NivelMadurez} | Ver objeto Diagnostico para detalles";
                 return resultado;
             }
             catch (Exception ex)
@@ -95,6 +114,53 @@ namespace MadurezTecnologica.Logica
                 resultado.Mensaje = $"Error durante el análisis: {ex.Message}";
                 return resultado;
             }
+        }
+
+        // Método privado que persiste todo el análisis en cascada en la BD
+        private void PersistirAnalisis(Empresa empresa, string rutaPdf, string textoCrudo, Diagnostico diagnostico, ResultadoAnalisis resultado)
+        {
+            // 1. Verificar si la empresa ya existe (por RIF)
+            int empresaId;
+            var empresaExistente = _repoEmpresa.ObtenerPorRif(empresa.Rif);
+
+            if (empresaExistente != null)
+            {
+                empresaId = empresaExistente.Id;
+            }
+            else
+            {
+                empresa.FechaRegistro = DateTime.Now;
+                empresaId = _repoEmpresa.Guardar(empresa);
+            }
+            resultado.EmpresaId = empresaId;
+
+            // 2. Crear una nueva conversación para este análisis
+            var conversacion = new Conversacion
+            {
+                EmpresaId = empresaId,
+                FechaInicio = DateTime.Now,
+                RutaInforme = rutaPdf
+            };
+            int conversacionId = _repoConversacion.Guardar(conversacion);
+            resultado.ConversacionId = conversacionId;
+
+            // 3. Guardar el análisis completo como primer mensaje (de la IA)
+            var mensajeAnalisis = new Mensaje
+            {
+                ConversacionId = conversacionId,
+                Remitente = "IA",
+                Contenido = textoCrudo,
+                Timestamp = DateTime.Now,
+                Orden = 1
+            };
+            _repoMensaje.Guardar(mensajeAnalisis);
+
+            // 4. Guardar el diagnóstico estructurado
+            diagnostico.ConversacionId = conversacionId;
+            int diagnosticoId = _repoDiagnostico.Guardar(diagnostico);
+            resultado.DiagnosticoId = diagnosticoId;
+
+            resultado.PersistidoEnBD = true;
         }
     }
 }

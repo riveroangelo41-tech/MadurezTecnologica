@@ -6,6 +6,7 @@
         public int Id { get; set; }
 
         public int ConversacionId { get; set; }
+        public string ResumenEmpresa { get; set; } = "";
 
         public int NivelMadurez { get; set; }
 

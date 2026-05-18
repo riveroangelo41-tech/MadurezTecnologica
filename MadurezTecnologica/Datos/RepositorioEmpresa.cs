@@ -84,5 +84,35 @@ namespace MadurezTecnologica.Datos
 
             return null;
         }
+        // Método para obtener una empresa por su RIF, que es un identificador único
+        public Empresa? ObtenerPorRif(string rif)
+        {
+            using var conexion = new SqliteConnection(BaseDatos.CadenaConexion);
+            conexion.Open();
+
+            var cmd = conexion.CreateCommand();
+            cmd.CommandText = "SELECT * FROM Empresas WHERE Rif = $rif";
+            cmd.Parameters.AddWithValue("$rif", rif);
+
+            using var reader = cmd.ExecuteReader();
+            if (reader.Read())
+            {
+                return new Empresa
+                {
+                    Id = reader.GetInt32(0),
+                    Nombre = reader.GetString(1),
+                    Rif = reader.GetString(2),
+                    Sector = reader.GetString(3),
+                    CantidadEmpleados = reader.IsDBNull(4) ? 0 : reader.GetInt32(4),
+                    Direccion = reader.GetString(5),
+                    Telefono = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                    FechaRegistro = DateTime.Parse(reader.GetString(7))
+                };
+            }
+
+            return null;
+        }
+
+
     }
 }
