@@ -30,6 +30,7 @@
         {
             btnProbar = new Button();
             txtResultado = new TextBox();
+            btnDescargarPlantilla = new Button();
             SuspendLayout();
             // 
             // btnProbar
@@ -53,11 +54,22 @@
             txtResultado.Size = new Size(700, 400);
             txtResultado.TabIndex = 1;
             // 
+            // btnDescargarPlantilla
+            // 
+            btnDescargarPlantilla.Location = new Point(718, 99);
+            btnDescargarPlantilla.Name = "btnDescargarPlantilla";
+            btnDescargarPlantilla.Size = new Size(75, 23);
+            btnDescargarPlantilla.TabIndex = 2;
+            btnDescargarPlantilla.Text = "Descargar plantilla";
+            btnDescargarPlantilla.UseVisualStyleBackColor = true;
+            btnDescargarPlantilla.Click += btnDescargarPlantilla_Click;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(800, 450);
+            Controls.Add(btnDescargarPlantilla);
             Controls.Add(txtResultado);
             Controls.Add(btnProbar);
             Name = "Form1";
@@ -70,5 +82,6 @@
 
         private Button btnProbar;
         private TextBox txtResultado;
+        private Button btnDescargarPlantilla;
     }
 }

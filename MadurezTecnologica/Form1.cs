@@ -14,333 +14,59 @@ namespace MadurezTecnologica
         private async void btnProbar_Click(object sender, EventArgs e)
         {
             var resultado = new StringBuilder();
+            resultado.AppendLine("===== PRUEBA: CARGA DE HISTORIAL DE CONVERSACIÓN =====");
+            txtResultado.Text = resultado.ToString();
+            txtResultado.Refresh();
 
             try
             {
-                // === 1. GUARDAR UNA EMPRESA ===
-                var repoEmpresa = new RepositorioEmpresa();
-                var empresa = new Empresa
+                var gestorConv = new MadurezTecnologica.Logica.GestorConversacion();
+
+                // Probar con las 3 conversaciones que tienes de las pruebas del sábado
+                // Si los IDs son distintos en tu BD, ajústalos según lo que veas en DB Browser
+                int[] conversacionesAProbra = { 1, 2, 3 };
+
+                foreach (int convId in conversacionesAProbra)
                 {
-                    Nombre = "Software Solutions C.A.",
-                    Rif = $"J-{DateTime.Now:HHmmssfff}-0",
-                    Sector = "Desarrollo de software a medida",
-                    CantidadEmpleados = 25,
-                    Direccion = "Av. 5 de Julio, Maracaibo, Zulia",
-                    Telefono = "+58 261-7900000",
-                    FechaRegistro = DateTime.Now
-                };
-                int empresaId = repoEmpresa.Guardar(empresa);
-                resultado.AppendLine($"✓ Empresa guardada con ID: {empresaId}");
-
-                // === 2. GUARDAR UNA CONVERSACIÓN ===
-                var repoConv = new RepositorioConversacion();
-                var conversacion = new Conversacion
-                {
-                    EmpresaId = empresaId,
-                    FechaInicio = DateTime.Now,
-                    Estado = "activa",
-                    RutaInforme = "C:/informes/prueba.pdf"
-                };
-                int convId = repoConv.Guardar(conversacion);
-                resultado.AppendLine($"✓ Conversación guardada con ID: {convId}");
-
-                // === 3. GUARDAR 3 MENSAJES ===
-                var repoMsg = new RepositorioMensaje();
-
-                repoMsg.Guardar(new Mensaje
-                {
-                    ConversacionId = convId,
-                    Remitente = "Usuario",
-                    Contenido = "Hola, quiero evaluar mi empresa de software.",
-                    Timestamp = DateTime.Now,
-                    Orden = 1
-                });
-
-                repoMsg.Guardar(new Mensaje
-                {
-                    ConversacionId = convId,
-                    Remitente = "IA",
-                    Contenido = "Perfecto, comencemos con el análisis de su informe.",
-                    Timestamp = DateTime.Now,
-                    Orden = 2
-                });
-
-                repoMsg.Guardar(new Mensaje
-                {
-                    ConversacionId = convId,
-                    Remitente = "Usuario",
-                    Contenido = "Usamos Git y Jenkins para CI/CD.",
-                    Timestamp = DateTime.Now,
-                    Orden = 3
-                });
-
-                resultado.AppendLine($"✓ 3 mensajes guardados");
-
-                // === 4. GUARDAR UN DIAGNÓSTICO INICIAL ===
-                var repoDiag = new RepositorioDiagnostico();
-                var diagnostico = new Diagnostico
-                {
-                    ConversacionId = convId,
-                    NivelMadurez = 3,
-                    Fortalezas = "Uso de control de versiones y CI/CD",
-                    Debilidades = "Falta documentación técnica",
-                    Riesgos = "Dependencia de pocos desarrolladores senior",
-                    Recomendaciones = "Implementar revisiones de código sistemáticas",
-                    FechaGeneracion = DateTime.Now,
-                    EsFinal = false
-                };
-                int diagId = repoDiag.Guardar(diagnostico);
-                resultado.AppendLine($"✓ Diagnóstico guardado con ID: {diagId}");
-
-                resultado.AppendLine();
-                resultado.AppendLine("===== LECTURA DE DATOS =====");
-                resultado.AppendLine();
-
-                // === 5. LEER TODAS LAS EMPRESAS ===
-                var empresas = repoEmpresa.ObtenerTodas();
-                resultado.AppendLine($"Empresas en BD: {empresas.Count}");
-                foreach (var emp in empresas)
-                {
-                    resultado.AppendLine($"  - [{emp.Id}] {emp.Nombre}");
-                    resultado.AppendLine($"    RIF: {emp.Rif} | Sector: {emp.Sector}");
-                    resultado.AppendLine($"    Empleados: {emp.CantidadEmpleados} | Tel: {emp.Telefono}");
-                    resultado.AppendLine($"    Dirección: {emp.Direccion}");
                     resultado.AppendLine();
-                }
+                    resultado.AppendLine($"--- Conversación #{convId} ---");
 
-                // === 6. LEER MENSAJES DE LA CONVERSACIÓN ===
-                resultado.AppendLine();
-                int totalMensajes = repoMsg.ContarPorConversacion(convId);
-                resultado.AppendLine($"Mensajes de la conversación {convId}: {totalMensajes}");
+                    // Cargar el historial
+                    var mensajes = gestorConv.CargarHistorial(convId);
 
-                var mensajes = repoMsg.ObtenerPorConversacion(convId);
-                foreach (var msg in mensajes)
-                {
-                    resultado.AppendLine($"  [{msg.Orden}] {msg.Remitente}: {msg.Contenido}");
-                }
-
-                // === 7. LEER ÚLTIMO DIAGNÓSTICO ===
-                resultado.AppendLine();
-                var ultimoDiag = repoDiag.ObtenerUltimoPorConversacion(convId);
-                if (ultimoDiag != null)
-                {
-                    resultado.AppendLine($"Último diagnóstico:");
-                    resultado.AppendLine($"  Nivel madurez: {ultimoDiag.NivelMadurez}");
-                    resultado.AppendLine($"  Es final: {ultimoDiag.EsFinal}");
-                    resultado.AppendLine($"  Fortalezas: {ultimoDiag.Fortalezas}");
-                }
-
-                resultado.AppendLine();
-
-                // === 8. BATERÍA DE PRUEBAS DEL ORQUESTADOR ===
-                resultado.AppendLine();
-                resultado.AppendLine("===== BATERÍA DE PRUEBAS - SEMANA 2 =====");
-                txtResultado.Text = resultado.ToString();
-                txtResultado.Refresh();
-
-                // Ruta del PDF de prueba (declarada una sola vez)
-                string rutaPdfPrueba = @"C:\Users\Home\Desktop\plantilla_codeminka_llenada.pdf";
-
-                var orquestador = new MadurezTecnologica.Logica.OrquestadorAnalisis();
-
-                // ----- PRUEBA 1: Caso normal con PDF válido -----
-                resultado.AppendLine();
-                resultado.AppendLine("--- PRUEBA 1: Análisis normal ---");
-                txtResultado.Text = resultado.ToString();
-                txtResultado.Refresh();
-
-                try
-                {
-                    var empresa1 = new MadurezTecnologica.Modelos.Empresa
+                    if (mensajes.Count == 0)
                     {
-                        Nombre = "CodeMinka, C.A.",
-                        Rif = "J-40128765-3",
-                        Sector = "Desarrollo de aplicaciones móviles",
-                        CantidadEmpleados = 8,
-                        Direccion = "Av. Francisco de Miranda, Caracas",
-                        Telefono = "+58 212-5552345"
-                    };
-
-                    var analisis1 = await orquestador.AnalizarInformePdf(rutaPdfPrueba, empresa1);
-
-                    resultado.AppendLine($"Modo: {analisis1.ModoUsado}");
-                    resultado.AppendLine($"Método validación: {analisis1.MetodoValidacion}");
-                    resultado.AppendLine($"Exitoso: {analisis1.Exitoso}");
-                    resultado.AppendLine($"Caracteres procesados: {analisis1.CaracteresProcesados}");
-
-                    if (analisis1.Exitoso && analisis1.Diagnostico != null)
-                    {
-                        var diag = analisis1.Diagnostico;
-                        resultado.AppendLine();
-                        resultado.AppendLine("--- DIAGNÓSTICO PARSEADO ---");
-                        resultado.AppendLine();
-                        resultado.AppendLine("RESUMEN DE LA EMPRESA:");
-                        resultado.AppendLine(RecortarTexto(diag.ResumenEmpresa, 500));
-                        resultado.AppendLine();
-                        resultado.AppendLine($"Nivel de madurez: {diag.NivelMadurez}");
-                        resultado.AppendLine();
-                        resultado.AppendLine("FORTALEZAS:");
-                        resultado.AppendLine(RecortarTexto(diag.Fortalezas, 250));
-                        resultado.AppendLine();
-                        resultado.AppendLine("DEBILIDADES:");
-                        resultado.AppendLine(RecortarTexto(diag.Debilidades, 250));
-                        resultado.AppendLine();
-                        resultado.AppendLine("RIESGOS:");
-                        resultado.AppendLine(RecortarTexto(diag.Riesgos, 250));
-                        resultado.AppendLine();
-                        resultado.AppendLine("RECOMENDACIONES:");
-                        resultado.AppendLine(RecortarTexto(diag.Recomendaciones, 250));
-                    }
-                    else
-                    {
-                        resultado.AppendLine($"Mensaje: {analisis1.Mensaje}");
+                        resultado.AppendLine($"Sin mensajes (esta conversación no existe o está vacía)");
+                        continue;
                     }
 
-                    if (analisis1.PersistidoEnBD)
-                    {
-                        resultado.AppendLine();
-                        resultado.AppendLine("--- PERSISTENCIA EN BD ---");
-                        resultado.AppendLine($"EmpresaId: {analisis1.EmpresaId}");
-                        resultado.AppendLine($"ConversacionId: {analisis1.ConversacionId}");
-                        resultado.AppendLine($"DiagnosticoId: {analisis1.DiagnosticoId}");
-                    }
+                    // Mostrar el resumen
+                    resultado.AppendLine(gestorConv.ResumirHistorial(convId));
+
+                    // Convertir al formato Claude
+                    var paraIA = gestorConv.ConstruirMensajesParaIA(mensajes);
+                    resultado.AppendLine($"Mensajes convertidos al formato Claude: {paraIA.Count}");
+                    resultado.AppendLine($"  - Mensajes 'user': {paraIA.Count(m => m.Role == "user")}");
+                    resultado.AppendLine($"  - Mensajes 'assistant': {paraIA.Count(m => m.Role == "assistant")}");
+
+                    // Calcular siguiente orden
+                    int siguienteOrden = gestorConv.CalcularSiguienteOrden(convId);
+                    resultado.AppendLine($"Siguiente Orden: {siguienteOrden}");
                 }
-                catch (Exception ex)
-                {
-                    resultado.AppendLine($"Error inesperado: {ex.Message}");
-                }
-
-                txtResultado.Text = resultado.ToString();
-                txtResultado.Refresh();
-
-                // ----- PRUEBA 2: PDF inexistente -----
-                resultado.AppendLine();
-                resultado.AppendLine("--- PRUEBA 2: PDF con ruta inválida ---");
-                txtResultado.Text = resultado.ToString();
-                txtResultado.Refresh();
-
-                try
-                {
-                    var empresa2 = new MadurezTecnologica.Modelos.Empresa
-                    {
-                        Nombre = "Empresa Fantasma",
-                        Sector = "Test"
-                    };
-
-                    var analisis2 = await orquestador.AnalizarInformePdf(
-                        @"C:\Ruta\Que\No\Existe\fantasma.pdf",
-                        empresa2
-                    );
-
-                    resultado.AppendLine($"Modo: {analisis2.ModoUsado}");
-                    resultado.AppendLine($"Exitoso: {analisis2.Exitoso}");
-                    resultado.AppendLine($"Mensaje: {analisis2.Mensaje}");
-                }
-                catch (Exception ex)
-                {
-                    resultado.AppendLine($"Error inesperado: {ex.Message}");
-                }
-
-                txtResultado.Text = resultado.ToString();
-                txtResultado.Refresh();
-
-                // ----- PRUEBA 3: Modo offline forzado -----
-                resultado.AppendLine();
-                resultado.AppendLine("--- PRUEBA 3: Modo offline forzado ---");
-                txtResultado.Text = resultado.ToString();
-                txtResultado.Refresh();
-
-                try
-                {
-                    // Forzar offline
-                    MadurezTecnologica.Inteligencia.DetectorConexion.ActivarModoOfflineForzado();
-
-                    var empresa3 = new MadurezTecnologica.Modelos.Empresa
-                    {
-                        Nombre = "CodeMinka, C.A.",
-                        Sector = "Desarrollo de aplicaciones móviles"
-                    };
-
-                    var analisis3 = await orquestador.AnalizarInformePdf(rutaPdfPrueba, empresa3);
-
-                    resultado.AppendLine($"Modo: {analisis3.ModoUsado}");
-                    resultado.AppendLine($"Exitoso: {analisis3.Exitoso}");
-                    resultado.AppendLine($"Mensaje: {analisis3.Mensaje}");
-
-                    // Restaurar modo normal
-                    MadurezTecnologica.Inteligencia.DetectorConexion.DesactivarModoOfflineForzado();
-                }
-                catch (Exception ex)
-                {
-                    resultado.AppendLine($"Error inesperado: {ex.Message}");
-                }
-                // ----- PRUEBA 4: PDF que NO corresponde a la empresa registrada -----
-                resultado.AppendLine();
-                resultado.AppendLine("--- PRUEBA 4: Coherencia PDF-Empresa ---");
-                txtResultado.Text = resultado.ToString();
-                txtResultado.Refresh();
-
-                try
-                {
-                    // Registramos una empresa DIFERENTE a la del PDF
-                    var empresaIncorrecta = new MadurezTecnologica.Modelos.Empresa
-                    {
-                        Nombre = "OtraEmpresa Distinta, C.A.",
-                        Rif = "J-99999999-9",
-                        Sector = "Otro sector cualquiera",
-                        CantidadEmpleados = 50,
-                        Direccion = "Otra dirección cualquiera",
-                        Telefono = "+58 000-0000000"
-                    };
-
-                    // Subimos el PDF de CodeMinka pero registramos OtraEmpresa
-                    var analisis4 = await orquestador.AnalizarInformePdf(rutaPdfPrueba, empresaIncorrecta);
-
-                    resultado.AppendLine($"Modo: {analisis4.ModoUsado}");
-                    resultado.AppendLine($"Método validación: {analisis4.MetodoValidacion}");
-                    resultado.AppendLine($"Exitoso: {analisis4.Exitoso}");
-                    resultado.AppendLine($"Mensaje: {analisis4.Mensaje}");
-                }
-                catch (Exception ex)
-                {
-                    resultado.AppendLine($"Error inesperado: {ex.Message}");
-                }
-                // ----- PRUEBA 5: Generación de plantilla Word -----
-                resultado.AppendLine();
-                resultado.AppendLine("--- PRUEBA 5: Generación de plantilla ---");
-                txtResultado.Text = resultado.ToString();
-                txtResultado.Refresh();
-
-                try
-                {
-                    var generador = new MadurezTecnologica.Logica.GeneradorPlantilla();
-
-                    // Guardar la plantilla en el escritorio
-                    string rutaEscritorio = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-                    string nombreArchivo = $"plantilla_madurez_{DateTime.Now:yyyyMMdd_HHmmss}.docx";
-                    string rutaSalida = System.IO.Path.Combine(rutaEscritorio, nombreArchivo);
-
-                    string archivoGenerado = generador.GenerarPlantilla(rutaSalida);
-
-                    resultado.AppendLine($"✓ Plantilla generada: {archivoGenerado}");
-                    resultado.AppendLine($"Tamaño: {new System.IO.FileInfo(archivoGenerado).Length} bytes");
-                }
-                catch (Exception ex)
-                {
-                    resultado.AppendLine($"✗ Error al generar plantilla: {ex.Message}");
-                }
-
-                // ----- RESUMEN FINAL -----
-                resultado.AppendLine();
-                resultado.AppendLine("===== FIN DE PRUEBAS =====");
-                txtResultado.Text = resultado.ToString();
             }
             catch (Exception ex)
             {
-                // Manejo general para el try principal
-                resultado.AppendLine($"Error inesperado: {ex.Message}");
-                txtResultado.Text = resultado.ToString();
+                resultado.AppendLine($"✗ Error: {ex.Message}");
             }
+
+            txtResultado.Text = resultado.ToString();
+        }
+
+        // Método auxiliar para truncar strings en la tabla de resumen
+        private string Truncar(string texto, int max)
+        {
+            if (string.IsNullOrEmpty(texto)) return "";
+            return texto.Length > max ? texto.Substring(0, max) : texto;
         }
         private string RecortarTexto(string texto, int maxCaracteres)
         {
@@ -349,8 +75,100 @@ namespace MadurezTecnologica
             return texto.Substring(0, maxCaracteres) + "...";
         }
 
+        private void btnDescargarPlantilla_Click(object sender, EventArgs e)
+        {
+           
+            // Configurar el diálogo de guardado
+            using var dialogo = new SaveFileDialog();
+            dialogo.Title = "Guardar plantilla de evaluación"; // Título del diálogo
+            dialogo.Filter = "Documento Word (*.docx)|*.docx"; // Solo permitir archivos .docx
+            dialogo.DefaultExt = "docx"; // Extensión por defecto
+            dialogo.FileName = $"plantilla_madurez_{DateTime.Now:yyyyMMdd_HHmmss}.docx"; // Nombre sugerido
+            dialogo.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);// Abrir el diálogo en el escritorio
+
+            // Mostrar el diálogo
+            if (dialogo.ShowDialog() != DialogResult.OK)
+            {
+                // El usuario canceló
+                return;
+            }
+
+            // Intentar generar la plantilla
+            try
+            {
+                // Deshabilitar el botón mientras se genera
+                btnDescargarPlantilla.Enabled = false;
+                btnDescargarPlantilla.Text = "Generando...";
+                btnDescargarPlantilla.Refresh();
+
+                var generador = new MadurezTecnologica.Logica.GeneradorPlantilla();
+                string archivoGenerado = generador.GenerarPlantilla(dialogo.FileName);
+
+                // Confirmación al usuario
+                var resultado = MessageBox.Show(
+                    $"Plantilla generada exitosamente en:\n{archivoGenerado}\n\n¿Desea abrirla ahora?",
+                    "Descarga completa",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information
+                );
+
+                // Si dice que sí, abrir el archivo
+                if (resultado == DialogResult.Yes)
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = archivoGenerado,
+                        UseShellExecute = true
+                    });
+                }
+            }
+            catch (UnauthorizedAccessException) // Sin permisos para escribir en la ubicación seleccionada
+            {
+                MessageBox.Show(
+                    "No tiene permisos para guardar en esa carpeta. Intente con otra ubicación (por ejemplo, su Escritorio).",
+                    "Sin permisos",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+            }
+            catch (System.IO.IOException ex) when (ex.Message.Contains("being used")) // Archivo bloqueado por otro proceso
+            {
+                MessageBox.Show(
+                    "El archivo ya está abierto en otro programa. Ciérrelo e intente nuevamente.",
+                    "Archivo bloqueado",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+            }
+            catch (System.IO.DirectoryNotFoundException) // Carpeta no encontrada (aunque SaveFileDialog debería evitar esto)
+            {
+                MessageBox.Show(
+                    "La carpeta seleccionada no existe. Por favor seleccione una carpeta válida.",
+                    "Carpeta no encontrada",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+            }
+            catch (Exception ex) // Cualquier otro error inesperado
+            {
+                MessageBox.Show(
+                    $"Ocurrió un error inesperado al generar la plantilla:\n\n{ex.Message}",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+            finally
+            {
+                // Restaurar el botón
+                btnDescargarPlantilla.Enabled = true;
+                btnDescargarPlantilla.Text = "Descargar plantilla";
+            }
+        }
     }
-}
+
+ }
+
 
 
 

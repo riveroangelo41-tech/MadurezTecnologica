@@ -46,6 +46,51 @@ el modo offline manualmente.
 
 3. Compilar y ejecutar con Visual Studio 2022 o superior.
 
-## Autor
+## Autores
 
-Angelo Rivero — Trabajo de grado, 2026
+Angelo Rivero y Yelimar Sanchez — Trabajo de grado, 2026
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+# Resultados de Pruebas — Sistema de Evaluación de Madurez Tecnológica
+
+## Validación de discriminación de niveles CMMI
+
+**Fecha de pruebas:** 24 de mayo de 2026
+**Versión del sistema:** Final de Semana 3 (diagnóstico estructurado)
+**Modelo de IA:** Claude Sonnet 4.6 (claude-sonnet-4-6)
+
+### Metodología
+
+Se generaron 3 informes empresariales ficticios diseñados para representar
+3 niveles distintos del modelo CMMI:
+
+- **Nivel 1 (Inicial)** — CodeMinka, C.A.: 8 empleados, procesos caóticos, sin pruebas, sin CI/CD
+- **Nivel 3 (Definido)** — Codex Digital, C.A.: 42 empleados, Scrum formal, ISO 27001
+- **Nivel 5 (Optimizado)** — Quantum Software Group: 287 empleados, ML predictivo, A/B testing automatizado
+
+Cada informe fue analizado por el sistema, que devolvió un diagnóstico
+estructurado con nivel CMMI estimado.
+
+### Resultados
+
+| Empresa                       | Esperado | Obtenido | Coincidencia |
+|-------------------------------|----------|----------|--------------|
+| CodeMinka, C.A.               | 1        | 1        | ✓ Exacto     |
+| Codex Digital, C.A.           | 3        | 3        | ✓ Exacto     |
+| Quantum Software Group        | 5        | 5        | ✓ Exacto     |
+
+**Tasa de acierto: 3/3 (100%)**
+
+### Conclusión
+
+El sistema discrimina correctamente entre niveles CMMI con distancia
+significativa (1, 3 y 5). Los diagnósticos coinciden exactamente con
+el nivel esperado en todos los casos probados.
+
+### Trabajo futuro
+
+- Ampliar pruebas a niveles intermedios (2 y 4) para verificar
+  discriminación en grados sutiles.
+- Pruebas con informes reales (no ficticios) cuando el sistema entre
+  en fase de validación con usuarios.

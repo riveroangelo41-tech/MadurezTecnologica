@@ -117,5 +117,40 @@ namespace MadurezTecnologica.Inteligencia
 
             return respuesta.Content[0].Text;
         }
+        public async Task<string> EnviarConversacion(List<MensajeIA> mensajes, string? promptSistema = null)
+        {
+            // Construir la petición con la conversación completa
+            var peticion = new PeticionIA
+            {
+                Model = _modelo,
+                MaxTokens = _maxTokens,
+                System = promptSistema,
+                Messages = mensajes
+            };
+
+            // Preparar el HTTP request
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages"); // URL de la API de Anthropic para enviar mensajes
+            request.Headers.Add("x-api-key", _apiKey); // Agregar la API Key en los encabezados para autenticar la solicitud
+            request.Headers.Add("anthropic-version", "2023-06-01"); // Agregar la versión de la API en los encabezados
+            request.Content = JsonContent.Create(peticion); // Convertir la petición a formato JSON y agregarla al cuerpo de la solicitud
+
+            // Enviar y esperar respuesta
+            var response = await _httpClient.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode) // Verificar que la respuesta sea exitosa
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                throw new Exception($"Error de la API ({response.StatusCode}): {errorBody}");
+            }
+
+            var respuesta = await response.Content.ReadFromJsonAsync<RespuestaIA>();
+
+            if (respuesta == null || respuesta.Content.Count == 0)
+            {
+                throw new Exception("La respuesta de la API vino vacía o mal formada");
+            }
+
+            return respuesta.Content[0].Text;
+        }
     }
 }
