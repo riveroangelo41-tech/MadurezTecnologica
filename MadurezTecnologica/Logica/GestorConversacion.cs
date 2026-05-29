@@ -82,5 +82,91 @@ namespace MadurezTecnologica.Logica
 
             return sb.ToString(); // Devuelve el resumen construido como una cadena
         }
+        public async Task<string> EnviarMensajeUsuario(int conversacionId, string textoUsuario)
+        {
+            // Validación básica
+            if (string.IsNullOrWhiteSpace(textoUsuario))
+            {
+                throw new ArgumentException("El mensaje del usuario no puede estar vacío.");
+            }
+
+            // 1. Cargar el historial actual de la conversación
+            var historial = CargarHistorial(conversacionId);
+
+            // 2. Convertir el historial al formato de Claude
+            var mensajesIA = ConstruirMensajesParaIA(historial);
+
+            // 3. Asegurar que la conversación empiece con un mensaje "user"
+            //    (la API lo exige; nuestro historial empieza con el análisis del assistant)
+            if (mensajesIA.Count > 0 && mensajesIA[0].Role == "assistant")
+            {
+                mensajesIA.Insert(0, new MensajeIA
+                {
+                    Role = "user",
+                    Content = "Te compartí el informe de mi empresa y me entregaste el siguiente análisis de madurez tecnológica."
+                });
+            }
+
+            // 4. Agregar el nuevo mensaje del usuario al final
+            mensajesIA.Add(new MensajeIA
+            {
+                Role = "user",
+                Content = textoUsuario
+            });
+
+
+            // 5. Enviar todo el contexto a Claude
+            // Garantizar alternancia correcta de roles antes de enviar
+            mensajesIA = NormalizarAlternancia(mensajesIA);
+
+            string promptSistema = _constructorPrompt.PromptSistema();
+            string respuestaIA = await _clienteIA.EnviarConversacion(mensajesIA, promptSistema);
+
+            // 6. Si llegamos aquí, la llamada fue exitosa. Ahora persistimos ambos mensajes.
+            int ordenUsuario = CalcularSiguienteOrden(conversacionId);
+
+            // 7. Guardar el mensaje del usuario
+            _repoMensaje.Guardar(new Mensaje
+            {
+                ConversacionId = conversacionId,
+                Remitente = "Usuario",
+                Contenido = textoUsuario,
+                Timestamp = DateTime.Now,
+                Orden = ordenUsuario
+            });
+
+            // 8. Guardar la respuesta de la IA
+            _repoMensaje.Guardar(new Mensaje
+            {
+                ConversacionId = conversacionId,
+                Remitente = "IA",
+                Contenido = respuestaIA,
+                Timestamp = DateTime.Now,
+                Orden = ordenUsuario + 1
+            });
+
+            // 9. Devolver la respuesta para mostrarla al usuario
+            return respuestaIA;
+        }
+        private List<MensajeIA> NormalizarAlternancia(List<MensajeIA> mensajes)
+        {
+            var normalizada = new List<MensajeIA>();
+
+            foreach (var m in mensajes)
+            {
+                // Si el último mensaje agregado tiene el mismo rol, combinarlos
+                if (normalizada.Count > 0 && normalizada[normalizada.Count - 1].Role == m.Role)
+                {
+                    normalizada[normalizada.Count - 1].Content += "\n\n" + m.Content;
+                }
+                else
+                {
+                    normalizada.Add(new MensajeIA { Role = m.Role, Content = m.Content });
+                }
+            }
+
+            return normalizada;
+        }
+
     }
 }

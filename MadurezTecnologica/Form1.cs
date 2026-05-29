@@ -14,7 +14,7 @@ namespace MadurezTecnologica
         private async void btnProbar_Click(object sender, EventArgs e)
         {
             var resultado = new StringBuilder();
-            resultado.AppendLine("===== PRUEBA: CARGA DE HISTORIAL DE CONVERSACIÓN =====");
+            resultado.AppendLine("===== PRUEBA: CONVERSACIÓN CON MEMORIA =====");
             txtResultado.Text = resultado.ToString();
             txtResultado.Refresh();
 
@@ -22,37 +22,37 @@ namespace MadurezTecnologica
             {
                 var gestorConv = new MadurezTecnologica.Logica.GestorConversacion();
 
-                // Probar con las 3 conversaciones que tienes de las pruebas del sábado
-                // Si los IDs son distintos en tu BD, ajústalos según lo que veas en DB Browser
-                int[] conversacionesAProbra = { 1, 2, 3 };
+                // Usa el ID de una conversación que exista en tu BD (ajusta si es necesario)
+                int conversacionId = 4;
 
-                foreach (int convId in conversacionesAProbra)
-                {
-                    resultado.AppendLine();
-                    resultado.AppendLine($"--- Conversación #{convId} ---");
+                // Mostrar el historial antes de la pregunta
+                resultado.AppendLine();
+                resultado.AppendLine("--- Historial ANTES de la pregunta ---");
+                resultado.AppendLine(gestorConv.ResumirHistorial(conversacionId));
+                txtResultado.Text = resultado.ToString();
+                txtResultado.Refresh();
 
-                    // Cargar el historial
-                    var mensajes = gestorConv.CargarHistorial(convId);
+                // La pregunta del usuario
+                string pregunta = "¿Cuál sería el primer paso más importante y económico que debería tomar mi empresa para mejorar su nivel de madurez?";
 
-                    if (mensajes.Count == 0)
-                    {
-                        resultado.AppendLine($"Sin mensajes (esta conversación no existe o está vacía)");
-                        continue;
-                    }
+                resultado.AppendLine("--- Pregunta del usuario ---");
+                resultado.AppendLine(pregunta);
+                resultado.AppendLine();
+                resultado.AppendLine("⏳ Enviando a Claude con todo el contexto...");
+                txtResultado.Text = resultado.ToString();
+                txtResultado.Refresh();
 
-                    // Mostrar el resumen
-                    resultado.AppendLine(gestorConv.ResumirHistorial(convId));
+                // Enviar y recibir respuesta
+                string respuesta = await gestorConv.EnviarMensajeUsuario(conversacionId, pregunta);
 
-                    // Convertir al formato Claude
-                    var paraIA = gestorConv.ConstruirMensajesParaIA(mensajes);
-                    resultado.AppendLine($"Mensajes convertidos al formato Claude: {paraIA.Count}");
-                    resultado.AppendLine($"  - Mensajes 'user': {paraIA.Count(m => m.Role == "user")}");
-                    resultado.AppendLine($"  - Mensajes 'assistant': {paraIA.Count(m => m.Role == "assistant")}");
+                resultado.AppendLine();
+                resultado.AppendLine("--- Respuesta de Claude ---");
+                resultado.AppendLine(respuesta);
+                resultado.AppendLine();
 
-                    // Calcular siguiente orden
-                    int siguienteOrden = gestorConv.CalcularSiguienteOrden(convId);
-                    resultado.AppendLine($"Siguiente Orden: {siguienteOrden}");
-                }
+                // Mostrar el historial después
+                resultado.AppendLine("--- Historial DESPUÉS de la conversación ---");
+                resultado.AppendLine(gestorConv.ResumirHistorial(conversacionId));
             }
             catch (Exception ex)
             {
