@@ -9,6 +9,7 @@ namespace MadurezTecnologica.Logica
         // Atributos para manejar la interacción con la IA y el acceso a datos
         private readonly ClienteIA _clienteIA;
         private readonly ConstructorPrompt _constructorPrompt;
+        private readonly GestorDiagnostico _gestorDiagnostico;
         private readonly RepositorioMensaje _repoMensaje;
         private readonly RepositorioConversacion _repoConversacion;
         private readonly RepositorioEmpresa _repoEmpresa;
@@ -19,6 +20,7 @@ namespace MadurezTecnologica.Logica
             // Inicializa los objetos necesarios para la gestión de conversaciones
             _clienteIA = new ClienteIA();
             _constructorPrompt = new ConstructorPrompt();
+            _gestorDiagnostico = new GestorDiagnostico();
             _repoMensaje = new RepositorioMensaje();
             _repoConversacion = new RepositorioConversacion();
             _repoEmpresa = new RepositorioEmpresa();
@@ -84,14 +86,35 @@ namespace MadurezTecnologica.Logica
         }
         public async Task<string> EnviarMensajeUsuario(int conversacionId, string textoUsuario)
         {
-            // Validación básica
+            // === Validaciones previas ===
+
+            // 1. Validar texto no vacío
             if (string.IsNullOrWhiteSpace(textoUsuario))
             {
                 throw new ArgumentException("El mensaje del usuario no puede estar vacío.");
             }
 
-            // 1. Cargar el historial actual de la conversación
+            // 2. Validar texto no excesivamente largo (límite por mensaje individual)
+            const int MAX_LONGITUD_MENSAJE = 10000;
+            if (textoUsuario.Length > MAX_LONGITUD_MENSAJE)
+            {
+                throw new ArgumentException(
+                    $"El mensaje es demasiado largo ({textoUsuario.Length} caracteres). " +
+                    $"Máximo permitido: {MAX_LONGITUD_MENSAJE} caracteres.");
+            }
+
+            // 3. Validar que la conversación existe
+            if (!_repoConversacion.Existe(conversacionId))
+            {
+                throw new ArgumentException(
+                    $"La conversación con ID {conversacionId} no existe en la base de datos.");
+            }
+
+            // === Resto del flujo (igual que antes) ===
+
+            // 4. Cargar el historial actual de la conversación
             var historial = CargarHistorial(conversacionId);
+
 
             // 2. Convertir el historial al formato de Claude
             var mensajesIA = ConstruirMensajesParaIA(historial);
@@ -148,6 +171,95 @@ namespace MadurezTecnologica.Logica
             // 9. Devolver la respuesta para mostrarla al usuario
             return respuestaIA;
         }
+        public async Task<Diagnostico> RegenerarDiagnosticoFinal(int conversacionId) // Este método se llama cuando el usuario hace clic en "Refinar diagnóstico" para generar un nuevo diagnóstico final considerando toda la conversación previa
+        {
+            //Validaciones previas 
+
+            if (!_repoConversacion.Existe(conversacionId))
+            {
+                throw new ArgumentException( 
+                    $"La conversación con ID {conversacionId} no existe."); // Validar que la conversación existe antes de intentar cargar su historial o generar un diagnóstico final. Si no existe, se lanza una excepción con un mensaje claro.
+            }
+
+            var historial = CargarHistorial(conversacionId); // Cargar el historial de mensajes de la conversación para construir el contexto que se enviará a Claude. Este historial incluirá tanto el análisis inicial como todas las interacciones posteriores del usuario.
+
+            if (historial.Count < 2) // Validar que hay suficientes mensajes en el historial para justificar un refinamiento del diagnóstico. Si solo hay el análisis inicial (1 mensaje), no tiene sentido generar un nuevo diagnóstico final, ya que no se ha aportado información adicional ni se ha tenido una conversación significativa.
+            {
+                throw new InvalidOperationException(
+                    "Se requiere al menos un intercambio conversacional previo para refinar el diagnóstico. " +
+                    "Esta conversación solo tiene el análisis inicial.");
+            }
+
+            // construir el contexto para Claude 
+
+            var mensajesIA = ConstruirMensajesParaIA(historial); // Convertir el historial de mensajes al formato que espera la API de Claude que es lista de objetos con Role y Content.
+
+            // Asegurar que la conversación empiece con "user"
+            if (mensajesIA.Count > 0 && mensajesIA[0].Role == "assistant")  // Si el primer mensaje es del assistant, insertamos un mensaje "user" al inicio para cumplir con el formato que exige la API de Claude, que requiere que la conversación comience con un mensaje del usuario.
+            {
+                // Insertar un mensaje "user" al inicio del contexto para cumplir con el formato requerido por la API de Claude, que exige que la conversación comience con un mensaje del usuario. Este mensaje explica que se compartió el informe inicial y se recibió un análisis de madurez tecnológica, estableciendo así el contexto para toda la conversación posterior.
+                mensajesIA.Insert(0, new MensajeIA
+                {
+                    Role = "user",
+                    Content = "Te compartí el informe de mi empresa y me entregaste un análisis de madurez tecnológica."
+                });
+            }
+
+            // Agregar la solicitud de refinamiento
+            mensajesIA.Add(new MensajeIA
+            {
+                Role = "user",
+                Content =
+                    "Considerando toda nuestra conversación previa y la información adicional que te he " +
+                    "proporcionado, regenera el diagnóstico de madurez tecnológica con el mismo formato " +
+                    "estructurado de 7 secciones (RESUMEN DE LA EMPRESA, NIVEL DE MADUREZ, FORTALEZAS, " +
+                    "DEBILIDADES, RIESGOS, RECOMENDACIONES, PREGUNTAS PARA EL USUARIO). Incorpora todos " +
+                    "los detalles aportados durante la conversación. Este es el diagnóstico final."
+            });
+
+            // Garantizar alternancia de roles
+            mensajesIA = NormalizarAlternancia(mensajesIA);
+
+            //  Enviar a Claude =
+
+            string promptSistema = _constructorPrompt.PromptSistema();
+            string respuestaCruda = await _clienteIA.EnviarConversacion(mensajesIA, promptSistema);
+
+            // Parsear 
+
+            var diagnosticoFinal = _gestorDiagnostico.ParsearRespuesta(respuestaCruda);
+            diagnosticoFinal.ConversacionId = conversacionId;
+            diagnosticoFinal.EsFinal = true;
+
+            int idGuardado = _repoDiagnostico.Guardar(diagnosticoFinal);
+            diagnosticoFinal.Id = idGuardado;
+
+            // Persistir también la solicitud y la respuesta en el historial 
+
+            int ordenSolicitud = CalcularSiguienteOrden(conversacionId); // Calcular el siguiente orden para asignar a los nuevos mensajes que se van a guardar en el historial. Esto asegura que los mensajes se mantengan en el orden correcto dentro de la conversación.
+            // Guardar la solicitud de diagnóstico final como un nuevo mensaje en el historial de la conversación, con el remitente "Usuario" y el contenido indicando que se trata de una solicitud de diagnóstico final que incluye toda la conversación previa. Esto permite mantener un registro completo de la interacción y el contexto que llevó a la generación del diagnóstico final.
+            _repoMensaje.Guardar(new Mensaje
+            {
+                ConversacionId = conversacionId,
+                Remitente = "Usuario",
+                Contenido = "[Solicitud de diagnóstico final con toda la conversación]",
+                Timestamp = DateTime.Now,
+                Orden = ordenSolicitud
+            });
+            // Guardar la respuesta de la IA (el diagnóstico final en formato crudo) como un nuevo mensaje en el historial de la conversación, con el remitente "IA" y el contenido siendo la respuesta cruda recibida de Claude. Esto permite mantener un registro completo de la interacción y el contexto que llevó a la generación del diagnóstico final, así como la respuesta exacta que se le dio al usuario.
+            _repoMensaje.Guardar(new Mensaje
+            {
+                ConversacionId = conversacionId,
+                Remitente = "IA",
+                Contenido = respuestaCruda,
+                Timestamp = DateTime.Now,
+                Orden = ordenSolicitud + 1
+            });
+
+            return diagnosticoFinal;
+        }
+
+
         private List<MensajeIA> NormalizarAlternancia(List<MensajeIA> mensajes)
         {
             var normalizada = new List<MensajeIA>();
@@ -166,6 +278,32 @@ namespace MadurezTecnologica.Logica
             }
 
             return normalizada;
+        }
+
+        public Conversacion? ObtenerConversacionActiva(int empresaId)
+        {
+            return _repoConversacion.ObtenerUltimaPorEmpresa(empresaId);
+        }
+
+        // Estima cuántos tokens consume aproximadamente una conversación
+        public int EstimarTokens(int conversacionId)
+        {
+            var mensajes = CargarHistorial(conversacionId);
+            int totalCaracteres = 0;
+
+            foreach (var m in mensajes)
+            {
+                totalCaracteres += m.Contenido.Length; // Suma la longitud de cada mensaje para obtener el total de caracteres
+            }
+
+            // Aproximación estándar: 1 token ≈ 4 caracteres
+            return totalCaracteres / 4;
+        }
+
+        // Indica si la conversación se está acercando al límite de tokens
+        public bool ConversacionMuyLarga(int conversacionId, int umbralTokens = 150000)
+        {
+            return EstimarTokens(conversacionId) > umbralTokens;
         }
 
     }

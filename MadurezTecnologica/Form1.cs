@@ -9,50 +9,76 @@ namespace MadurezTecnologica
         public Form1()
         {
             InitializeComponent();
+
+            // === Botón "Abrir chat" creado por código ===
+            var btnAbrirChat = new Button
+            {
+                Name = "btnAbrirChat",
+                Text = "Abrir chat",
+                Size = new Size(150, 35),
+                Location = new Point(750, 180)   // ajusta si se solapa con los otros botones
+            };
+            btnAbrirChat.Click += BtnAbrirChat_Click;
+            Controls.Add(btnAbrirChat);
+        }
+
+        private string RecortarTexto(string texto, int maxCaracteres)
+        {
+            if (string.IsNullOrEmpty(texto)) return "";
+            if (texto.Length <= maxCaracteres) return texto;
+            return texto.Substring(0, maxCaracteres) + "...";
         }
 
         private async void btnProbar_Click(object sender, EventArgs e)
         {
             var resultado = new StringBuilder();
-            resultado.AppendLine("===== PRUEBA: CONVERSACIÓN CON MEMORIA =====");
+            resultado.AppendLine("===== PRUEBA: MOTOR OFFLINE =====");
+            resultado.AppendLine();
             txtResultado.Text = resultado.ToString();
             txtResultado.Refresh();
 
             try
             {
-                var gestorConv = new MadurezTecnologica.Logica.GestorConversacion();
+                // Leer el texto del PDF
+                var gestorInforme = new MadurezTecnologica.Logica.GestorInforme();
+                string rutaPdf = @"C:\Users\Home\Desktop\informe_codeminka_corto.pdf";
 
-                // Usa el ID de una conversación que exista en tu BD (ajusta si es necesario)
-                int conversacionId = 4;
+                if (!System.IO.File.Exists(rutaPdf))
+                {
+                    resultado.AppendLine($"✗ No se encontró el PDF en: {rutaPdf}");
+                    txtResultado.Text = resultado.ToString();
+                    return;
+                }
 
-                // Mostrar el historial antes de la pregunta
-                resultado.AppendLine();
-                resultado.AppendLine("--- Historial ANTES de la pregunta ---");
-                resultado.AppendLine(gestorConv.ResumirHistorial(conversacionId));
-                txtResultado.Text = resultado.ToString();
-                txtResultado.Refresh();
-
-                // La pregunta del usuario
-                string pregunta = "¿Cuál sería el primer paso más importante y económico que debería tomar mi empresa para mejorar su nivel de madurez?";
-
-                resultado.AppendLine("--- Pregunta del usuario ---");
-                resultado.AppendLine(pregunta);
-                resultado.AppendLine();
-                resultado.AppendLine("⏳ Enviando a Claude con todo el contexto...");
-                txtResultado.Text = resultado.ToString();
-                txtResultado.Refresh();
-
-                // Enviar y recibir respuesta
-                string respuesta = await gestorConv.EnviarMensajeUsuario(conversacionId, pregunta);
-
-                resultado.AppendLine();
-                resultado.AppendLine("--- Respuesta de Claude ---");
-                resultado.AppendLine(respuesta);
+                string textoPdf = gestorInforme.ExtraerTexto(rutaPdf);
+                resultado.AppendLine($"PDF leído: {textoPdf.Length} caracteres");
                 resultado.AppendLine();
 
-                // Mostrar el historial después
-                resultado.AppendLine("--- Historial DESPUÉS de la conversación ---");
-                resultado.AppendLine(gestorConv.ResumirHistorial(conversacionId));
+                // Crear empresa de prueba
+                var empresa = new MadurezTecnologica.Modelos.Empresa
+                {
+                    Nombre = "CodeMinka, C.A.",
+                    Rif = "J-40128765-3"
+                };
+
+                // Ejecutar motor offline
+                var motor = new MadurezTecnologica.Logica.MotorOffline();
+                var diagnostico = motor.AnalizarTexto(textoPdf, empresa);
+
+                resultado.AppendLine($"Nivel detectado: {diagnostico.NivelMadurez}");
+                resultado.AppendLine($"(esperado para CodeMinka: 1)");
+                resultado.AppendLine();
+                resultado.AppendLine("--- RESUMEN ---");
+                resultado.AppendLine(diagnostico.ResumenEmpresa);
+                resultado.AppendLine();
+                resultado.AppendLine("--- FORTALEZAS ---");
+                resultado.AppendLine(diagnostico.Fortalezas);
+                resultado.AppendLine();
+                resultado.AppendLine("--- DEBILIDADES ---");
+                resultado.AppendLine(diagnostico.Debilidades);
+                resultado.AppendLine();
+                resultado.AppendLine("--- RECOMENDACIONES ---");
+                resultado.AppendLine(diagnostico.Recomendaciones);
             }
             catch (Exception ex)
             {
@@ -62,41 +88,23 @@ namespace MadurezTecnologica
             txtResultado.Text = resultado.ToString();
         }
 
-        // Método auxiliar para truncar strings en la tabla de resumen
-        private string Truncar(string texto, int max)
-        {
-            if (string.IsNullOrEmpty(texto)) return "";
-            return texto.Length > max ? texto.Substring(0, max) : texto;
-        }
-        private string RecortarTexto(string texto, int maxCaracteres)
-        {
-            if (string.IsNullOrEmpty(texto)) return "(sin contenido)";
-            if (texto.Length <= maxCaracteres) return texto;
-            return texto.Substring(0, maxCaracteres) + "...";
-        }
-
         private void btnDescargarPlantilla_Click(object sender, EventArgs e)
         {
-           
             // Configurar el diálogo de guardado
             using var dialogo = new SaveFileDialog();
-            dialogo.Title = "Guardar plantilla de evaluación"; // Título del diálogo
-            dialogo.Filter = "Documento Word (*.docx)|*.docx"; // Solo permitir archivos .docx
-            dialogo.DefaultExt = "docx"; // Extensión por defecto
-            dialogo.FileName = $"plantilla_madurez_{DateTime.Now:yyyyMMdd_HHmmss}.docx"; // Nombre sugerido
-            dialogo.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);// Abrir el diálogo en el escritorio
+            dialogo.Title = "Guardar plantilla de evaluación";
+            dialogo.Filter = "Documento Word (*.docx)|*.docx";
+            dialogo.DefaultExt = "docx";
+            dialogo.FileName = $"plantilla_madurez_{DateTime.Now:yyyyMMdd_HHmmss}.docx";
+            dialogo.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
 
-            // Mostrar el diálogo
             if (dialogo.ShowDialog() != DialogResult.OK)
             {
-                // El usuario canceló
                 return;
             }
 
-            // Intentar generar la plantilla
             try
             {
-                // Deshabilitar el botón mientras se genera
                 btnDescargarPlantilla.Enabled = false;
                 btnDescargarPlantilla.Text = "Generando...";
                 btnDescargarPlantilla.Refresh();
@@ -104,7 +112,6 @@ namespace MadurezTecnologica
                 var generador = new MadurezTecnologica.Logica.GeneradorPlantilla();
                 string archivoGenerado = generador.GenerarPlantilla(dialogo.FileName);
 
-                // Confirmación al usuario
                 var resultado = MessageBox.Show(
                     $"Plantilla generada exitosamente en:\n{archivoGenerado}\n\n¿Desea abrirla ahora?",
                     "Descarga completa",
@@ -112,7 +119,6 @@ namespace MadurezTecnologica
                     MessageBoxIcon.Information
                 );
 
-                // Si dice que sí, abrir el archivo
                 if (resultado == DialogResult.Yes)
                 {
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -122,7 +128,7 @@ namespace MadurezTecnologica
                     });
                 }
             }
-            catch (UnauthorizedAccessException) // Sin permisos para escribir en la ubicación seleccionada
+            catch (UnauthorizedAccessException)
             {
                 MessageBox.Show(
                     "No tiene permisos para guardar en esa carpeta. Intente con otra ubicación (por ejemplo, su Escritorio).",
@@ -131,7 +137,7 @@ namespace MadurezTecnologica
                     MessageBoxIcon.Warning
                 );
             }
-            catch (System.IO.IOException ex) when (ex.Message.Contains("being used")) // Archivo bloqueado por otro proceso
+            catch (System.IO.IOException ex) when (ex.Message.Contains("being used"))
             {
                 MessageBox.Show(
                     "El archivo ya está abierto en otro programa. Ciérrelo e intente nuevamente.",
@@ -140,7 +146,7 @@ namespace MadurezTecnologica
                     MessageBoxIcon.Warning
                 );
             }
-            catch (System.IO.DirectoryNotFoundException) // Carpeta no encontrada (aunque SaveFileDialog debería evitar esto)
+            catch (System.IO.DirectoryNotFoundException)
             {
                 MessageBox.Show(
                     "La carpeta seleccionada no existe. Por favor seleccione una carpeta válida.",
@@ -149,7 +155,7 @@ namespace MadurezTecnologica
                     MessageBoxIcon.Warning
                 );
             }
-            catch (Exception ex) // Cualquier otro error inesperado
+            catch (Exception ex)
             {
                 MessageBox.Show(
                     $"Ocurrió un error inesperado al generar la plantilla:\n\n{ex.Message}",
@@ -160,15 +166,30 @@ namespace MadurezTecnologica
             }
             finally
             {
-                // Restaurar el botón
                 btnDescargarPlantilla.Enabled = true;
                 btnDescargarPlantilla.Text = "Descargar plantilla";
             }
         }
+
+        private void BtnAbrirChat_Click(object? sender, EventArgs e)
+        {
+            // Pedir el ID de conversación al usuario (versión simple)
+            string input = Microsoft.VisualBasic.Interaction.InputBox(
+                "Ingresa el ID de la conversación que deseas abrir:",
+                "Abrir chat",
+                "4");
+
+            if (string.IsNullOrWhiteSpace(input)) return;
+
+            if (!int.TryParse(input, out int conversacionId))
+            {
+                MessageBox.Show("Debes ingresar un número válido.",
+                    "ID inválido", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var formChat = new MadurezTecnologica.Presentacion.FormChat(conversacionId);
+            formChat.Show();
+        }
     }
-
- }
-
-
-
-
+}

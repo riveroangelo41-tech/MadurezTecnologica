@@ -35,7 +35,7 @@
             // 
             // btnProbar
             // 
-            btnProbar.Location = new Point(718, 42);
+            btnProbar.Location = new Point(748, 43);
             btnProbar.Name = "btnProbar";
             btnProbar.Size = new Size(75, 23);
             btnProbar.TabIndex = 0;
@@ -56,7 +56,7 @@
             // 
             // btnDescargarPlantilla
             // 
-            btnDescargarPlantilla.Location = new Point(718, 99);
+            btnDescargarPlantilla.Location = new Point(748, 103);
             btnDescargarPlantilla.Name = "btnDescargarPlantilla";
             btnDescargarPlantilla.Size = new Size(75, 23);
             btnDescargarPlantilla.TabIndex = 2;
@@ -68,7 +68,7 @@
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(800, 450);
+            ClientSize = new Size(968, 450);
             Controls.Add(btnDescargarPlantilla);
             Controls.Add(txtResultado);
             Controls.Add(btnProbar);
