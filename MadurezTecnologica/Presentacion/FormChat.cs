@@ -29,9 +29,9 @@ namespace MadurezTecnologica.Presentacion
             CargarHistorialInicial();
         }
 
-      
+
         // CONFIGURACIÓN VISUAL
-        
+
 
         private void ConfigurarFormulario() // Configuración general del formulario
         {
@@ -143,9 +143,9 @@ namespace MadurezTecnologica.Presentacion
             Controls.Add(btnCerrar);
         }
 
-        
+
         // CARGA INICIAL DEL HISTORIAL
-      
+
 
         private void CargarHistorialInicial() // Carga el historial de mensajes al abrir el chat
         {
@@ -172,7 +172,7 @@ namespace MadurezTecnologica.Presentacion
         }
 
         // RENDERIZADO DE MENSAJES
-        
+
 
         private void AgregarMensajeAlChat(string remitente, string contenido) // Agrega un mensaje al chat con formato según el remitente
         {
@@ -217,7 +217,7 @@ namespace MadurezTecnologica.Presentacion
         // INTERACCIÓN DEL USUARIO
 
 
-       
+
         private void TxtEntrada_KeyDown(object? sender, KeyEventArgs e) // Detecta Ctrl+Enter para enviar el mensaje sin hacer clic en el botón
         {
             if (e.Control && e.KeyCode == Keys.Enter)
@@ -250,7 +250,7 @@ namespace MadurezTecnologica.Presentacion
             {
                 // Enviar el mensaje a Claude y esperar la respuesta
                 string respuesta = await _gestorConv.EnviarMensajeUsuario(_conversacionId, mensaje);
-                AgregarMensajeAlChat("IA", respuesta); 
+                AgregarMensajeAlChat("IA", respuesta);
             }
             catch (Exception ex)
             {
@@ -309,6 +309,11 @@ namespace MadurezTecnologica.Presentacion
                 BloquearControles(false);
                 lblEstado.Text = "";
             }
+        }
+
+        private void InitializeComponent()
+        {
+
         }
 
         // UTILIDADES 
