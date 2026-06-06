@@ -614,10 +614,9 @@ namespace MadurezTecnologica.Vistas
             var burbuja = new Panel
             {
                 BackColor = colorFondo,
-                Padding = new Padding(15, 12, 15, 12),
+                Padding = new Padding(0),
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                MaximumSize = new Size(anchoMaxBurbuja, 0),
                 Margin = new Padding(0)
             };
 
@@ -628,6 +627,8 @@ namespace MadurezTecnologica.Vistas
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 BackColor = Color.Transparent,
+                Padding = new Padding(25, 15, 25, 15),
+                MaximumSize = new Size(anchoMaxBurbuja, 0),
                 Margin = new Padding(0)
             };
 
@@ -637,7 +638,7 @@ namespace MadurezTecnologica.Vistas
                 Font = new Font("Segoe UI", 10),
                 ForeColor = colorTexto,
                 AutoSize = true,
-                MaximumSize = new Size(anchoMaxBurbuja - 40, 0),
+                MaximumSize = new Size(anchoMaxBurbuja - 60, 0),  
                 BackColor = Color.Transparent,
                 Margin = new Padding(0)
             };
