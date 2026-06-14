@@ -1,74 +1,60 @@
 ﻿using MadurezTecnologica.Inteligencia;
 
-using System.Net.Http; // importar la librería para hacer solicitudes HTTP
-using System.Net.Http.Json; // importar la librería para manejar JSON en las solicitudes HTTP
-using System.Text.Json; // importar la librería para manejar JSON en general
-using System.Text.Json.Serialization; // importar la librería para manejar la serialización JSON
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MadurezTecnologica.Inteligencia
 {
-    public class MensajeIA //clase que representa el mensaje que se envía a la IA, con atributos para el rol del emisor y el contenido del mensaje
+    public class MensajeIA
     {
-        [JsonPropertyName("role")] //atributo de quien envia el mensaje
+        [JsonPropertyName("role")]
         public string Role { get; set; } = "";
 
-        [JsonPropertyName("content")] //atributo del contenido del mensaje
+        [JsonPropertyName("content")]
         public string Content { get; set; } = "";
-
-
-
     }
-    public class PeticionIA//clase que representa la petición que se envía a la IA, con atributos para el modelo, el número máximo de tokens y la lista de mensajes
+
+    public class PeticionIA
     {
-        [JsonPropertyName("model")]//atributo del modelo de IA a utilizar
+        [JsonPropertyName("model")]
         public string Model { get; set; } = "";
 
-        [JsonPropertyName("max_tokens")]//atributo del número máximo de tokens que se pueden generar en la respuesta
+        [JsonPropertyName("max_tokens")]
         public int MaxTokens { get; set; }
 
         [JsonPropertyName("system")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? System { get; set; }
 
-        [JsonPropertyName("messages")]//atributo de la lista de mensajes que se envían a la IA
+        [JsonPropertyName("messages")]
         public List<MensajeIA> Messages { get; set; } = new List<MensajeIA>();
-
-
-
-
-
     }
 
-    public class BloqueContenido//clase que representa un bloque de contenido en la respuesta de la IA, con atributos para el tipo de bloque y el contenido del bloque
+    public class BloqueContenido
     {
-        [JsonPropertyName("type")]//atributo del tipo de bloque (por ejemplo, "paragraph", "code", etc.)
+        [JsonPropertyName("type")]
         public string Type { get; set; } = "";
 
-        [JsonPropertyName("text")]//atributo del contenido del bloque
-        public string Text { get; set; }= "";
-
-
-
-
-
+        [JsonPropertyName("text")]
+        public string Text { get; set; } = "";
     }
 
-    public class RespuestaIA // clase que representa la respuesta completa que devuelve la IA
+    public class RespuestaIA
     {
-
-        [JsonPropertyName("content")]//atributo del contenido completo de la respuesta de. la IA
+        [JsonPropertyName("content")]
         public List<BloqueContenido> Content { get; set; } = new List<BloqueContenido>();
-
-
-
     }
-    public class ClienteIA //clase para interactuar con la IA, utilizando los parámetros de configuración definidos en la clase Configuracion
-    {
-        private readonly string _apiKey;//almacena la API Key de Anthropic para autenticar las solicitudes a la IA
-        private readonly string _modelo;//almacena el nombre del modelo de IA a utilizar
-        private readonly int _maxTokens;//almacena el número máximo de tokens que se pueden generar en una respuesta
 
-        public ClienteIA()//constructor que inicializa los campos de configuración al crear una instancia del cliente de IA
+    public class ClienteIA
+    {
+        private readonly string _apiKey;
+        private readonly string _modelo;
+        private readonly int _maxTokens;
+
+        public ClienteIA()
         {
             _apiKey = Configuracion.ApiKey;
             _modelo = Configuracion.Modelo;
@@ -79,35 +65,30 @@ namespace MadurezTecnologica.Inteligencia
 
         public async Task<string> EnviarMensaje(string mensajeUsuario, string? promptSistema = null)
         {
-            // Construir la petición
             var peticion = new PeticionIA
             {
                 Model = _modelo,
                 MaxTokens = _maxTokens,
                 System = promptSistema,
                 Messages = new List<MensajeIA>
-        {
-            new MensajeIA { Role = "user", Content = mensajeUsuario }
-        }
+                {
+                    new MensajeIA { Role = "user", Content = mensajeUsuario }
+                }
             };
 
-            // Preparar el HTTP request
             var request = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages");
             request.Headers.Add("x-api-key", _apiKey);
             request.Headers.Add("anthropic-version", "2023-06-01");
             request.Content = JsonContent.Create(peticion);
 
-            // Enviar y esperar respuesta
             var response = await _httpClient.SendAsync(request);
 
-            // Verificar que la respuesta sea exitosa
             if (!response.IsSuccessStatusCode)
             {
                 var errorBody = await response.Content.ReadAsStringAsync();
                 throw new Exception($"Error de la API ({response.StatusCode}): {errorBody}");
             }
 
-            // Leer y parsear la respuesta
             var respuesta = await response.Content.ReadFromJsonAsync<RespuestaIA>();
 
             if (respuesta == null || respuesta.Content.Count == 0)
@@ -117,9 +98,9 @@ namespace MadurezTecnologica.Inteligencia
 
             return respuesta.Content[0].Text;
         }
+
         public async Task<string> EnviarConversacion(List<MensajeIA> mensajes, string? promptSistema = null)
         {
-            // Construir la petición con la conversación completa
             var peticion = new PeticionIA
             {
                 Model = _modelo,
@@ -128,16 +109,14 @@ namespace MadurezTecnologica.Inteligencia
                 Messages = mensajes
             };
 
-            // Preparar el HTTP request
-            var request = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages"); // URL de la API de Anthropic para enviar mensajes
-            request.Headers.Add("x-api-key", _apiKey); // Agregar la API Key en los encabezados para autenticar la solicitud
-            request.Headers.Add("anthropic-version", "2023-06-01"); // Agregar la versión de la API en los encabezados
-            request.Content = JsonContent.Create(peticion); // Convertir la petición a formato JSON y agregarla al cuerpo de la solicitud
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages");
+            request.Headers.Add("x-api-key", _apiKey);
+            request.Headers.Add("anthropic-version", "2023-06-01");
+            request.Content = JsonContent.Create(peticion);
 
-            // Enviar y esperar respuesta
             var response = await _httpClient.SendAsync(request);
 
-            if (!response.IsSuccessStatusCode) // Verificar que la respuesta sea exitosa
+            if (!response.IsSuccessStatusCode)
             {
                 var errorBody = await response.Content.ReadAsStringAsync();
                 throw new Exception($"Error de la API ({response.StatusCode}): {errorBody}");
@@ -151,6 +130,80 @@ namespace MadurezTecnologica.Inteligencia
             }
 
             return respuesta.Content[0].Text;
+        }
+
+        
+        // STREAMING: devuelve la respuesta chunk por chunk
+        
+        public async IAsyncEnumerable<string> EnviarConversacionStream(
+            List<MensajeIA> mensajes,
+            string? promptSistema = null,
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            using var http = new HttpClient();
+            http.Timeout = TimeSpan.FromSeconds(120);
+            http.DefaultRequestHeaders.Add("x-api-key", _apiKey);
+            http.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+
+            var bodyObj = new
+            {
+                model = _modelo,
+                max_tokens = _maxTokens,
+                system = promptSistema,
+                stream = true,
+                messages = mensajes.Select(m => new { role = m.Role, content = m.Content }).ToArray()
+            };
+
+            string bodyJson = JsonSerializer.Serialize(bodyObj);
+            var content = new StringContent(bodyJson, System.Text.Encoding.UTF8, "application/json");
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages")
+            {
+                Content = content
+            };
+
+            using var response = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            response.EnsureSuccessStatusCode();
+
+            using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var reader = new StreamReader(stream);
+
+            string? linea;
+            while ((linea = await reader.ReadLineAsync(ct).ConfigureAwait(false)) != null)
+            {
+                if (string.IsNullOrWhiteSpace(linea)) continue;
+                if (!linea.StartsWith("data: ")) continue;
+                string json = linea.Substring(6).Trim();
+                if (json == "[DONE]") break;
+
+                string? deltaTexto = ExtraerDeltaTexto(json);
+                if (!string.IsNullOrEmpty(deltaTexto))
+                {
+                    yield return deltaTexto;
+                }
+            }
+        }
+
+        private string? ExtraerDeltaTexto(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("type", out var tipo) &&
+                    tipo.GetString() == "content_block_delta" &&
+                    root.TryGetProperty("delta", out var delta) &&
+                    delta.TryGetProperty("type", out var deltaTipo) &&
+                    deltaTipo.GetString() == "text_delta" &&
+                    delta.TryGetProperty("text", out var texto))
+                {
+                    return texto.GetString();
+                }
+            }
+            catch { /* ignorar errores de parseo */ }
+
+            return null;
         }
     }
 }

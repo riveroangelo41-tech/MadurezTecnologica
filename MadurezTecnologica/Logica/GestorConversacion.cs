@@ -306,5 +306,68 @@ namespace MadurezTecnologica.Logica
             return EstimarTokens(conversacionId) > umbralTokens;
         }
 
+        public async IAsyncEnumerable<string> EnviarMensajeUsuarioStream(
+    int conversacionId,
+    string textoUsuario,
+    [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        {
+            // Validaciones (igual que en EnviarMensajeUsuario)
+            if (string.IsNullOrWhiteSpace(textoUsuario))
+                throw new ArgumentException("El mensaje del usuario no puede estar vacío.");
+
+            if (textoUsuario.Length > 10000)
+                throw new ArgumentException($"Mensaje demasiado largo ({textoUsuario.Length} caracteres).");
+
+            if (!_repoConversacion.Existe(conversacionId))
+                throw new ArgumentException($"La conversación con ID {conversacionId} no existe.");
+
+            // Cargar historial
+            var historial = CargarHistorial(conversacionId);
+            var mensajesIA = ConstruirMensajesParaIA(historial);
+
+            if (mensajesIA.Count > 0 && mensajesIA[0].Role == "assistant")
+            {
+                mensajesIA.Insert(0, new MensajeIA
+                {
+                    Role = "user",
+                    Content = "Te compartí el informe de mi empresa y me entregaste el siguiente análisis..."
+                });
+            }
+
+            mensajesIA.Add(new MensajeIA { Role = "user", Content = textoUsuario });
+            mensajesIA = NormalizarAlternancia(mensajesIA);
+
+            // Persistir el mensaje del usuario AHORA (antes del stream)
+            int orden = CalcularSiguienteOrden(conversacionId);
+            _repoMensaje.Guardar(new Mensaje
+            {
+                ConversacionId = conversacionId,
+                Remitente = "Usuario",
+                Contenido = textoUsuario,
+                Timestamp = DateTime.Now,
+                Orden = orden
+            });
+
+            // Construir la respuesta progresivamente mientras emitimos chunks
+            var respuestaCompleta = new System.Text.StringBuilder();
+            string promptSistema = _constructorPrompt.PromptSistema();
+
+            await foreach (var chunk in _clienteIA.EnviarConversacionStream(mensajesIA, promptSistema, ct))
+            {
+                respuestaCompleta.Append(chunk);
+                yield return chunk;
+            }
+
+            // Al terminar el stream, persistir el mensaje completo de la IA
+            _repoMensaje.Guardar(new Mensaje
+            {
+                ConversacionId = conversacionId,
+                Remitente = "IA",
+                Contenido = respuestaCompleta.ToString(),
+                Timestamp = DateTime.Now,
+                Orden = orden + 1
+            });
+        }
+
     }
 }

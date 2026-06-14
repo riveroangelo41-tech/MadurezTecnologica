@@ -159,14 +159,26 @@ namespace MadurezTecnologica.Presentacion
         private void CambiarVista(Button botonClickeado, string nombreVista)
         {
             EstablecerBotonActivo(botonClickeado);
-
             panelCentral.Controls.Clear();
 
-            // Si el usuario clickeó "Análisis con IA (Chat)", cargamos VistaChat
             if (botonClickeado == btnChat)
             {
                 var vistaChat = new MadurezTecnologica.Vistas.VistaChat();
                 panelCentral.Controls.Add(vistaChat);
+                return;
+            }
+
+            if (botonClickeado == btnEmpresas)    // ← AGREGAR ESTE BLOQUE
+            {
+                var vistaEmpresas = new MadurezTecnologica.Vistas.VistaEmpresas();
+                panelCentral.Controls.Add(vistaEmpresas);
+                return;
+            }
+
+            if (botonClickeado == btnCargarInforme)
+            {
+                var vistaCargarInforme = new MadurezTecnologica.Vistas.VistaCargarInforme();
+                panelCentral.Controls.Add(vistaCargarInforme);
                 return;
             }
 
@@ -205,6 +217,11 @@ namespace MadurezTecnologica.Presentacion
             path.AddArc(0, panel.Height - radio, radio, radio, 90, 90);
             path.CloseFigure();
             panel.Region = new Region(path);
+        }
+        public void NavegarAVistaChat()
+        {
+            // Simulamos un click en el botón del menú lateral
+            CambiarVista(btnChat, "Análisis con IA (Chat)");
         }
     }
 }

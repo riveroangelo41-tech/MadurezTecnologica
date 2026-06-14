@@ -4,6 +4,7 @@ namespace MadurezTecnologica.Vistas
 {
     public partial class VistaChat : UserControl
     {
+
         // Paneles principales
         private Panel panelHeader = null!;
         private Panel panelConversaciones = null!;
@@ -30,11 +31,13 @@ namespace MadurezTecnologica.Vistas
         private Label lblHeaderInfo = null!;
 
         // Estado del chat
-        private int _empresaIdActiva = 1;  // TEMPORAL: hardcoded
+        private int? _empresaIdActiva = null;  // se obtiene de EstadoApp en runtime
         private int? _conversacionActivaId = null;
         private MadurezTecnologica.Logica.GestorConversacion _gestorConv = null!;
         private MadurezTecnologica.Datos.RepositorioConversacion _repoConv = null!;
         private MadurezTecnologica.Datos.RepositorioEmpresa _repoEmpresa = null!;
+
+        private MadurezTecnologica.Datos.RepositorioDiagnostico _repoDiagnostico = null!;
 
         public VistaChat()
         {
@@ -51,12 +54,28 @@ namespace MadurezTecnologica.Vistas
             _gestorConv = new MadurezTecnologica.Logica.GestorConversacion();
             _repoConv = new MadurezTecnologica.Datos.RepositorioConversacion();
             _repoEmpresa = new MadurezTecnologica.Datos.RepositorioEmpresa();
+            _repoDiagnostico = new MadurezTecnologica.Datos.RepositorioDiagnostico();
 
             ConfigurarControl();
             CrearPanelChat();
             CrearPanelConversaciones();
             CrearHeader();
-            CargarConversacionesDeEmpresa();
+            this.Load += (s, e) =>
+            {
+                // Obtener empresa activa del estado global
+                _empresaIdActiva = Estado.EstadoApp.EmpresaActivaId;
+
+                // Suscribirse al evento de cambio de empresa
+                Estado.EstadoApp.EmpresaActivaCambio += OnEmpresaActivaCambio;
+
+                this.BeginInvoke(new Action(() => CargarEvaluacionesDeEmpresa()));
+            };
+
+            // Desuscribirse cuando la vista se destruya para evitar memory leaks
+            this.HandleDestroyed += (s, e) =>
+            {
+                Estado.EstadoApp.EmpresaActivaCambio -= OnEmpresaActivaCambio;
+            };
 
             // Activar double buffering en el flow de mensajes
             typeof(FlowLayoutPanel).InvokeMember(
@@ -167,7 +186,7 @@ namespace MadurezTecnologica.Vistas
 
             btnNuevaConversacion = new Button
             {
-                Text = "+ Nueva conversación",
+                Text = "+ Generar evaluación",
                 Font = new Font("Segoe UI", 9, FontStyle.Bold),
                 ForeColor = Paleta.TextoBlanco,
                 BackColor = Paleta.MoradoOscuro,
@@ -182,6 +201,7 @@ namespace MadurezTecnologica.Vistas
             pathBtn.AddArc(btnNuevaConversacion.Width - 30, 0, 30, 30, 270, 180);
             pathBtn.CloseFigure();
             btnNuevaConversacion.Region = new Region(pathBtn);
+            btnNuevaConversacion.Click += BtnGenerarEvaluacion_Click;
             panelHeader.Controls.Add(btnNuevaConversacion);
 
             ReposicionarBotonesHeader();
@@ -199,9 +219,9 @@ namespace MadurezTecnologica.Vistas
                 btnNuevaConversacion.Left - panelIndicadorConexion.Width - 15, 25);
         }
 
-        // ===================================================
+        
         // PANEL DE CONVERSACIONES (izquierda)
-        // ===================================================
+     
 
         private void CrearPanelConversaciones()
         {
@@ -218,7 +238,7 @@ namespace MadurezTecnologica.Vistas
 
             lblTituloConversaciones = new Label
             {
-                Text = "Conversaciones",
+                Text = "Evaluaciones",
                 Font = new Font("Segoe UI", 11, FontStyle.Bold),
                 ForeColor = Paleta.TextoOscuro,
                 Location = new Point(15, 10),
@@ -252,7 +272,7 @@ namespace MadurezTecnologica.Vistas
                 BackColor = Color.White,
                 Dock = DockStyle.Fill,
                 BorderStyle = BorderStyle.None,
-                PlaceholderText = "Buscar conversación..."
+                PlaceholderText = "Buscar evaluación..."
             };
             panelBuscador.Controls.Add(txtBuscarConversacion);
 
@@ -269,9 +289,9 @@ namespace MadurezTecnologica.Vistas
             panelConversaciones.Controls.Add(flowConversaciones);
         }
 
-        // ===================================================
+       
         // PANEL DE CHAT (centro/derecha)
-        // ===================================================
+        
 
         private void CrearPanelChat()
         {
@@ -387,54 +407,92 @@ namespace MadurezTecnologica.Vistas
             flowMensajes.BringToFront();
         }
 
-        // ===================================================
-        // CARGA DE CONVERSACIONES Y MENSAJES
-        // ===================================================
 
-        private void CargarConversacionesDeEmpresa()
+        // CARGA DE CONVERSACIONES Y MENSAJES
+
+
+        private void CargarEvaluacionesDeEmpresa()
         {
             flowConversaciones.SuspendLayout();
             flowConversaciones.Controls.Clear();
 
+            if (_empresaIdActiva == null)
+            {
+                var lblSinEmpresa = new Label
+                {
+                    Text = "No hay empresa seleccionada.\n\nVe a 'Empresas' y selecciona una empresa para empezar.",
+                    Font = new Font("Segoe UI", 9, FontStyle.Italic),
+                    ForeColor = Paleta.TextoOscuro,
+                    Size = new Size(280, 100),
+                    TextAlign = ContentAlignment.MiddleCenter
+                };
+                flowConversaciones.Controls.Add(lblSinEmpresa);
+
+                lblHeaderEmpresa.Text = "Sin empresa seleccionada";
+                lblHeaderInfo.Text = "";
+                flowMensajes.Controls.Clear();
+
+                flowConversaciones.ResumeLayout(true);
+                return;
+            }
+
             try
             {
                 var todas = _repoConv.ObtenerTodas();
-                var conversaciones = todas.Where(c => c.EmpresaId == _empresaIdActiva)
-                                          .OrderByDescending(c => c.FechaInicio)
-                                          .ToList();
+                var conversacion = todas.FirstOrDefault(c => c.EmpresaId == _empresaIdActiva.Value);
 
-                if (conversaciones.Count == 0)
+                if (conversacion == null)
                 {
                     var lblVacio = new Label
                     {
-                        Text = "Aún no hay conversaciones para esta empresa.",
+                        Text = "Esta empresa no tiene conversación iniciada todavía.",
                         Font = new Font("Segoe UI", 9, FontStyle.Italic),
                         ForeColor = Paleta.TextoOscuro,
                         Size = new Size(280, 60),
                         TextAlign = ContentAlignment.MiddleCenter
                     };
                     flowConversaciones.Controls.Add(lblVacio);
+
+                    var empresaSinConv = _repoEmpresa.ObtenerPorId(_empresaIdActiva.Value);
+                    lblHeaderEmpresa.Text = empresaSinConv?.Nombre ?? "Empresa";
+                    lblHeaderInfo.Text = $"Sector: {empresaSinConv?.Sector ?? "—"}   |   Empleados: {empresaSinConv?.CantidadEmpleados ?? 0}";
+                    flowMensajes.Controls.Clear();
+
                     return;
                 }
 
-                foreach (var conv in conversaciones)
+                _conversacionActivaId = conversacion.Id;
+                var empresa = _repoEmpresa.ObtenerPorId(_empresaIdActiva.Value);
+                lblHeaderEmpresa.Text = empresa?.Nombre ?? "Empresa";
+                lblHeaderInfo.Text = $"Sector: {empresa?.Sector ?? "—"}   |   Empleados: {empresa?.CantidadEmpleados ?? 0}";
+                CargarMensajes(conversacion.Id);
+
+                var diagnosticos = _repoDiagnostico.ObtenerHistorialPorConversacion(conversacion.Id)
+                                                   .OrderByDescending(d => d.FechaGeneracion)
+                                                   .ToList();
+
+                if (diagnosticos.Count == 0)
                 {
-                    var repoMensaje = new MadurezTecnologica.Datos.RepositorioMensaje();
-                    var mensajes = repoMensaje.ObtenerPorConversacion(conv.Id);
-                    string preview = mensajes.FirstOrDefault(m => m.Remitente == "Usuario")?.Contenido
-                                  ?? mensajes.FirstOrDefault()?.Contenido
-                                  ?? "(Sin mensajes)";
-                    if (preview.Length > 60) preview = preview.Substring(0, 60) + "...";
+                    var lblSinEvaluaciones = new Label
+                    {
+                        Text = "Aún no se ha generado ninguna evaluación.\n\nUsa el botón '+ Generar evaluación' del header.",
+                        Font = new Font("Segoe UI", 9, FontStyle.Italic),
+                        ForeColor = Paleta.TextoOscuro,
+                        Size = new Size(280, 80),
+                        TextAlign = ContentAlignment.MiddleCenter
+                    };
+                    flowConversaciones.Controls.Add(lblSinEvaluaciones);
+                    return;
+                }
 
-                    string titulo = $"Conversación #{conv.Id}";
-                    string hora = conv.FechaInicio.ToString("dd/MM HH:mm");
-
-                    AgregarTarjetaConversacion(conv.Id, titulo, preview, hora, seleccionada: false);
+                foreach (var diag in diagnosticos)
+                {
+                    AgregarTarjetaDiagnostico(diag);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error al cargar conversaciones: {ex.Message}",
+                MessageBox.Show($"Error al cargar evaluaciones: {ex.Message}",
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -444,21 +502,23 @@ namespace MadurezTecnologica.Vistas
         }
 
 
-        private void AgregarTarjetaConversacion(int conversacionId, string titulo, string preview, string hora, bool seleccionada)
+        private void AgregarTarjetaDiagnostico(Modelos.Diagnostico diag)
         {
-            Color colorFondo = seleccionada ? Paleta.MoradoOscuro : Paleta.VerdeGrisaceo;
+            // Color según si es diagnóstico final o intermedio
+            Color colorFondo = diag.EsFinal ? Paleta.MoradoOscuro : Paleta.VerdeGrisaceo;
             Color colorTexto = Paleta.TextoBlanco;
 
             var tarjeta = new Panel
             {
-                Size = new Size(280, 90),
+                Size = new Size(280, 100),
                 BackColor = colorFondo,
                 Margin = new Padding(0, 0, 0, 10),
                 Cursor = Cursors.Hand,
                 Padding = new Padding(12, 10, 12, 10),
-                Tag = conversacionId
+                Tag = diag.Id  // guardamos el Id por si necesitamos identificarla
             };
 
+            // Esquinas redondeadas
             var pathT = new System.Drawing.Drawing2D.GraphicsPath();
             int r = 18;
             pathT.AddArc(0, 0, r, r, 180, 90);
@@ -468,45 +528,66 @@ namespace MadurezTecnologica.Vistas
             pathT.CloseFigure();
             tarjeta.Region = new Region(pathT);
 
-            var lblTitulo = new Label
+            // Línea 1: Fecha + badge "FINAL"
+            var lblFecha = new Label
             {
-                Text = titulo,
+                Text = diag.FechaGeneracion.ToString("dd/MM/yyyy"),
                 Font = new Font("Segoe UI", 10, FontStyle.Bold),
                 ForeColor = colorTexto,
                 Location = new Point(12, 10),
-                Size = new Size(255, 18),
+                Size = new Size(150, 18),
                 BackColor = Color.Transparent
             };
-            tarjeta.Controls.Add(lblTitulo);
+            tarjeta.Controls.Add(lblFecha);
 
-            var lblPreview = new Label
+            if (diag.EsFinal)
             {
-                Text = preview,
-                Font = new Font("Segoe UI", 8),
+                var lblFinal = new Label
+                {
+                    Text = "FINAL",
+                    Font = new Font("Segoe UI", 7, FontStyle.Bold),
+                    ForeColor = Paleta.VerdeBrillante,
+                    Location = new Point(225, 12),
+                    Size = new Size(45, 16),
+                    BackColor = Color.Transparent,
+                    TextAlign = ContentAlignment.MiddleRight
+                };
+                tarjeta.Controls.Add(lblFinal);
+            }
+
+            // Línea 2: Nivel CMMI
+            var lblNivel = new Label
+            {
+                Text = $"Nivel CMMI: {diag.NivelMadurez}",
+                Font = new Font("Segoe UI", 10, FontStyle.Bold),
                 ForeColor = colorTexto,
                 Location = new Point(12, 32),
-                Size = new Size(255, 30),
+                Size = new Size(255, 20),
                 BackColor = Color.Transparent
             };
-            tarjeta.Controls.Add(lblPreview);
+            tarjeta.Controls.Add(lblNivel);
 
-            var lblHora = new Label
+            // Línea 3: Resumen breve
+            string resumen = diag.ResumenEmpresa;
+            if (resumen.Length > 70) resumen = resumen.Substring(0, 70) + "...";
+
+            var lblResumen = new Label
             {
-                Text = hora,
+                Text = resumen,
                 Font = new Font("Segoe UI", 8),
                 ForeColor = colorTexto,
-                Location = new Point(180, 65),
-                Size = new Size(90, 16),
-                BackColor = Color.Transparent,
-                TextAlign = ContentAlignment.MiddleRight
+                Location = new Point(12, 55),
+                Size = new Size(255, 35),
+                BackColor = Color.Transparent
             };
-            tarjeta.Controls.Add(lblHora);
+            tarjeta.Controls.Add(lblResumen);
 
-            EventHandler clickHandler = (s, e) => SeleccionarConversacion(conversacionId);
+            // Click → abrir modal con el reporte completo
+            EventHandler clickHandler = (s, e) => MostrarModalDiagnostico(diag);
             tarjeta.Click += clickHandler;
-            lblTitulo.Click += clickHandler;
-            lblPreview.Click += clickHandler;
-            lblHora.Click += clickHandler;
+            lblFecha.Click += clickHandler;
+            lblNivel.Click += clickHandler;
+            lblResumen.Click += clickHandler;
 
             flowConversaciones.Controls.Add(tarjeta);
         }
@@ -524,8 +605,8 @@ namespace MadurezTecnologica.Vistas
                         : Paleta.VerdeGrisaceo;
                 }
             }
-
-            var empresa = _repoEmpresa.ObtenerPorId(_empresaIdActiva);
+            if (_empresaIdActiva == null) return;
+            var empresa = _repoEmpresa.ObtenerPorId(_empresaIdActiva.Value);
             lblHeaderEmpresa.Text = empresa?.Nombre ?? "Empresa";
             lblHeaderInfo.Text = $"Sector: {empresa?.Sector ?? "—"}   |   Empleados: {empresa?.CantidadEmpleados ?? 0}";
 
@@ -555,14 +636,11 @@ namespace MadurezTecnologica.Vistas
             }
             finally
             {
-                flowMensajes.ResumeLayout(false);
-                flowMensajes.Visible = true;        
+                flowMensajes.ResumeLayout(true);
+                flowMensajes.Visible = true;
                 flowMensajes.PerformLayout();
 
-                if (flowMensajes.Controls.Count > 0)
-                {
-                    flowMensajes.ScrollControlIntoView(flowMensajes.Controls[flowMensajes.Controls.Count - 1]);
-                }
+                ScrollAlFinal();
             }
         }
         private void AgregarBurbuja(string remitente, string contenido, DateTime timestamp)
@@ -575,7 +653,7 @@ namespace MadurezTecnologica.Vistas
             if (anchoDisponible < 200) anchoDisponible = 200;
             int anchoMaxBurbuja = (int)(anchoDisponible * 0.65);
 
-            // === Fila como FlowLayoutPanel (avatar + burbuja se ordenan solos) ===
+            // Fila como FlowLayoutPanel (avatar + burbuja se ordenan solos) 
             var fila = new FlowLayoutPanel
             {
                 FlowDirection = esIA ? FlowDirection.LeftToRight : FlowDirection.RightToLeft,
@@ -588,7 +666,7 @@ namespace MadurezTecnologica.Vistas
                 Padding = new Padding(0)
             };
 
-            // === Avatar circular ===
+            // Avatar circular 
             var avatar = new Panel
             {
                 Size = new Size(40, 40),
@@ -610,7 +688,7 @@ namespace MadurezTecnologica.Vistas
             };
             avatar.Controls.Add(lblInicial);
 
-            // === Burbuja ===
+            //  Burbuja 
             var burbuja = new Panel
             {
                 BackColor = colorFondo,
@@ -634,7 +712,7 @@ namespace MadurezTecnologica.Vistas
 
             var lblMensaje = new Label
             {
-                Text = contenido,
+                Text = LimpiadorTexto.LimpiarMarkdown(contenido),
                 Font = new Font("Segoe UI", 10),
                 ForeColor = colorTexto,
                 AutoSize = true,
@@ -668,7 +746,7 @@ namespace MadurezTecnologica.Vistas
                 }));
             };
 
-            // === Agregar al flow layout en el orden correcto ===
+            // Agregar al flow layout en el orden correcto 
             fila.Controls.Add(avatar);
             fila.Controls.Add(burbuja);
 
@@ -682,6 +760,119 @@ namespace MadurezTecnologica.Vistas
             };
 
             flowMensajes.Controls.Add(fila);
+        }
+
+        // Versión especial de AgregarBurbuja que devuelve el Label para que podamos actualizarlo
+        private Label AgregarBurbujaStreaming()
+        {
+            int anchoDisponible = flowMensajes.ClientSize.Width - 100;
+            if (anchoDisponible < 200) anchoDisponible = 200;
+            int anchoMaxBurbuja = (int)(anchoDisponible * 0.65);
+
+            var fila = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                AutoSize = false,
+                Width = flowMensajes.ClientSize.Width - 30,
+                Height = 50,
+                Margin = new Padding(0, 5, 0, 10),
+                BackColor = Color.Transparent,
+                Padding = new Padding(0)
+            };
+
+            // Avatar de Claude
+            var avatar = new Panel
+            {
+                Size = new Size(40, 40),
+                BackColor = Paleta.MoradoClaro,
+                Margin = new Padding(0, 5, 10, 0)
+            };
+            var pathAvatar = new System.Drawing.Drawing2D.GraphicsPath();
+            pathAvatar.AddEllipse(0, 0, avatar.Width, avatar.Height);
+            avatar.Region = new Region(pathAvatar);
+
+            var lblInicial = new Label
+            {
+                Text = "C",
+                Font = new Font("Segoe UI", 14, FontStyle.Bold),
+                ForeColor = Paleta.TextoBlanco,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent
+            };
+            avatar.Controls.Add(lblInicial);
+
+            var burbuja = new Panel
+            {
+                BackColor = Paleta.MoradoOscuro,
+                Padding = new Padding(0),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Margin = new Padding(0)
+            };
+
+            var flowInterno = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.Transparent,
+                Padding = new Padding(25, 15, 25, 15),
+                MaximumSize = new Size(anchoMaxBurbuja, 0),
+                Margin = new Padding(0)
+            };
+
+            var lblMensaje = new Label
+            {
+                Text = "",
+                Font = new Font("Segoe UI", 10),
+                ForeColor = Paleta.TextoBlanco,
+                AutoSize = true,
+                MinimumSize = new Size(anchoMaxBurbuja - 60, 22),  // ← ancho mínimo desde el inicio
+                MaximumSize = new Size(anchoMaxBurbuja - 60, 0),
+                BackColor = Color.Transparent,
+                Margin = new Padding(0)
+            };
+            flowInterno.Controls.Add(lblMensaje);
+
+            var lblHora = new Label
+            {
+                Text = DateTime.Now.ToString("HH:mm"),
+                Font = new Font("Segoe UI", 7),
+                ForeColor = Color.FromArgb(200, 200, 200),
+                AutoSize = true,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, 6, 0, 0)
+            };
+            flowInterno.Controls.Add(lblHora);
+
+            burbuja.Controls.Add(flowInterno);
+
+            burbuja.HandleCreated += (s, e) =>
+            {
+                burbuja.BeginInvoke(new Action(() =>
+                {
+                    if (burbuja.Width > 0 && burbuja.Height > 0)
+                        Paleta.AplicarBordeRedondeadoSuave(burbuja, 18);
+                }));
+            };
+
+            fila.Controls.Add(avatar);
+            fila.Controls.Add(burbuja);
+
+            fila.HandleCreated += (s, e) =>
+            {
+                fila.BeginInvoke(new Action(() =>
+                {
+                    fila.Height = Math.Max(burbuja.PreferredSize.Height, 50) + 10;
+                }));
+            };
+
+            flowMensajes.Controls.Add(fila);
+
+            return lblMensaje;   // el label para actualizarlo
         }
 
         private void TxtEntrada_KeyDown(object? sender, KeyEventArgs e)
@@ -703,6 +894,13 @@ namespace MadurezTecnologica.Vistas
                 return;
             }
 
+            if (_empresaIdActiva == null)
+            {
+                MessageBox.Show("Primero selecciona una empresa en la sección 'Empresas'.",
+                    "Sin empresa", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             if (_conversacionActivaId == null)
             {
                 MessageBox.Show("Selecciona una conversación primero.",
@@ -710,42 +908,272 @@ namespace MadurezTecnologica.Vistas
                 return;
             }
 
+            // 1. Mostrar mensaje del usuario
             AgregarBurbuja("Usuario", texto, DateTime.Now);
             txtEntrada.Clear();
+            ScrollAlFinal();
+
+            // 2. Mostrar indicador "escribiendo..."
+            MostrarIndicadorEscribiendo();
 
             btnEnviar.Enabled = false;
             txtEntrada.Enabled = false;
 
+            Label? lblBurbujaIA = null;
+            var respuestaAcumulada = new System.Text.StringBuilder();
+
+            var timerActualizacion = new System.Windows.Forms.Timer { Interval = 100 };
+            timerActualizacion.Tick += (s, ev) =>
+            {
+                if (lblBurbujaIA != null && respuestaAcumulada.Length > 0)
+                {
+                    lblBurbujaIA.Text = LimpiadorTexto.LimpiarMarkdown(respuestaAcumulada.ToString());
+                    ScrollAlFinal();
+                }
+            };
+
             try
             {
-                string respuesta = await _gestorConv.EnviarMensajeUsuario(_conversacionActivaId.Value, texto);
-                AgregarBurbuja("IA", respuesta, DateTime.Now);
+                bool primerChunk = true;
 
-                if (flowMensajes.Controls.Count > 0)
+                await foreach (var chunk in _gestorConv.EnviarMensajeUsuarioStream(_conversacionActivaId.Value, texto))
                 {
-                    flowMensajes.ScrollControlIntoView(flowMensajes.Controls[flowMensajes.Controls.Count - 1]);
+                    if (primerChunk)
+                    {
+                        OcultarIndicadorEscribiendo();
+                        lblBurbujaIA = AgregarBurbujaStreaming();
+                        timerActualizacion.Start();
+                        primerChunk = false;
+                    }
+                    respuestaAcumulada.Append(chunk);
+                }
+
+                // Stream terminado: detener timer y reemplazar burbuja temporal por definitiva
+                timerActualizacion.Stop();
+
+                if (lblBurbujaIA != null)
+                {
+                    Control? filaTemporal = lblBurbujaIA.Parent?.Parent?.Parent;
+                    if (filaTemporal != null)
+                    {
+                        flowMensajes.Controls.Remove(filaTemporal);
+                        filaTemporal.Dispose();
+                    }
+                    AgregarBurbuja("IA", respuestaAcumulada.ToString(), DateTime.Now);
+                    ScrollAlFinal();
                 }
             }
             catch (Exception ex)
             {
+                timerActualizacion.Stop();
+                OcultarIndicadorEscribiendo();
                 MessageBox.Show($"Error al enviar mensaje: {ex.Message}",
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
+                timerActualizacion.Dispose();
                 btnEnviar.Enabled = true;
                 txtEntrada.Enabled = true;
                 txtEntrada.Focus();
             }
         }
 
-        
+
         // UTILIDAD
-        
+
 
         private void AplicarBordeRedondeado(Panel panel, int radio)
         {
             Paleta.AplicarBordeRedondeadoSuave(panel, radio);
         }
+        private Panel? _filaEscribiendo = null;
+
+        private void MostrarIndicadorEscribiendo()
+        {
+            int anchoDisponible = flowMensajes.ClientSize.Width - 100;
+            if (anchoDisponible < 200) anchoDisponible = 200;
+
+            var fila = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                AutoSize = false,
+                Width = flowMensajes.ClientSize.Width - 30,
+                Height = 60,
+                Margin = new Padding(0, 5, 0, 10),
+                BackColor = Color.Transparent,
+                Padding = new Padding(0)
+            };
+
+            // Avatar de Claude
+            var avatar = new Panel
+            {
+                Size = new Size(40, 40),
+                BackColor = Paleta.MoradoClaro,
+                Margin = new Padding(0, 5, 10, 0)
+            };
+            var pathAvatar = new System.Drawing.Drawing2D.GraphicsPath();
+            pathAvatar.AddEllipse(0, 0, avatar.Width, avatar.Height);
+            avatar.Region = new Region(pathAvatar);
+
+            var lblInicial = new Label
+            {
+                Text = "C",
+                Font = new Font("Segoe UI", 14, FontStyle.Bold),
+                ForeColor = Paleta.TextoBlanco,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent
+            };
+            avatar.Controls.Add(lblInicial);
+
+            // Burbuja con "Claude está escribiendo..."
+            var burbuja = new Panel
+            {
+                BackColor = Paleta.MoradoOscuro,
+                Padding = new Padding(0),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Margin = new Padding(0)
+            };
+
+            var lblEscribiendo = new Label
+            {
+                Text = "Claude está escribiendo...",
+                Font = new Font("Segoe UI", 10, FontStyle.Italic),
+                ForeColor = Paleta.TextoBlanco,
+                AutoSize = true,
+                BackColor = Color.Transparent,
+                Padding = new Padding(25, 15, 25, 15),
+                Margin = new Padding(0)
+            };
+            burbuja.Controls.Add(lblEscribiendo);
+
+            burbuja.HandleCreated += (s, e) =>
+            {
+                burbuja.BeginInvoke(new Action(() =>
+                {
+                    if (burbuja.Width > 0 && burbuja.Height > 0)
+                    {
+                        Paleta.AplicarBordeRedondeadoSuave(burbuja, 18);
+                    }
+                }));
+            };
+
+            fila.Controls.Add(avatar);
+            fila.Controls.Add(burbuja);
+
+            fila.HandleCreated += (s, e) =>
+            {
+                fila.BeginInvoke(new Action(() =>
+                {
+                    fila.Height = Math.Max(burbuja.PreferredSize.Height, 50) + 10;
+                }));
+            };
+
+            flowMensajes.Controls.Add(fila);
+            _filaEscribiendo = fila;
+
+            ScrollAlFinal();   //reemplaza el ScrollControlIntoView
+        }
+
+        private void OcultarIndicadorEscribiendo()
+        {
+            if (_filaEscribiendo != null)
+            {
+                flowMensajes.Controls.Remove(_filaEscribiendo);
+                _filaEscribiendo.Dispose();
+                _filaEscribiendo = null;
+            }
+        }
+
+
+        private void ScrollAlFinal()
+        {
+            if (flowMensajes.Controls.Count == 0) return;
+
+            // Calcular la posición vertical máxima
+            int alturaTotal = flowMensajes.Controls.OfType<Control>().Sum(c => c.Height + c.Margin.Vertical);
+
+            // Forzar el scroll al valor máximo permitido
+            flowMensajes.AutoScrollPosition = new Point(0, alturaTotal);
+        }
+
+        private async void BtnGenerarEvaluacion_Click(object? sender, EventArgs e)
+        {
+            if (_empresaIdActiva == null)
+            {
+                MessageBox.Show("Primero selecciona una empresa en la sección 'Empresas'.",
+                    "Sin empresa", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (_conversacionActivaId == null)
+            {
+                MessageBox.Show("Primero inicia una conversación con la empresa.",
+                    "Sin conversación", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // Confirmar
+            var confirmacion = MessageBox.Show(
+                "¿Generar una nueva evaluación considerando toda la conversación actual?\n\n" +
+                "Esto tomará algunos segundos.",
+                "Confirmar generación",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (confirmacion != DialogResult.Yes) return;
+
+            // Deshabilitar controles
+            btnNuevaConversacion.Enabled = false;
+            btnNuevaConversacion.Text = "Generando...";
+            btnEnviar.Enabled = false;
+            txtEntrada.Enabled = false;
+
+            try
+            {
+                var diagnosticoNuevo = await _gestorConv.RegenerarDiagnosticoFinal(_conversacionActivaId.Value);
+
+                // Recargar las evaluaciones del panel lateral
+                CargarEvaluacionesDeEmpresa();
+
+                // Mostrar el modal con el diagnóstico recién generado
+                MostrarModalDiagnostico(diagnosticoNuevo);
+            }
+            catch (InvalidOperationException ex)
+            {
+                MessageBox.Show(ex.Message, "No es posible aún",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error al generar la evaluación: {ex.Message}",
+                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                btnNuevaConversacion.Enabled = true;
+                btnNuevaConversacion.Text = "+ Generar evaluación";
+                btnEnviar.Enabled = true;
+                txtEntrada.Enabled = true;
+                txtEntrada.Focus();
+            }
+        }
+        private void MostrarModalDiagnostico(Modelos.Diagnostico diag)
+        {
+            using var modal = new Presentacion.FormDiagnostico(diag);
+            modal.ShowDialog(this.FindForm());
+        }
+        private void OnEmpresaActivaCambio()
+        {
+            _empresaIdActiva = Estado.EstadoApp.EmpresaActivaId;
+            _conversacionActivaId = null;   // Reset porque cambiamos de empresa
+            CargarEvaluacionesDeEmpresa();
+        }
+
+
+
     }
 }

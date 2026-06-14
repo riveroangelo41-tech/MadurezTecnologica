@@ -112,7 +112,32 @@ namespace MadurezTecnologica.Datos
 
             return null;
         }
+        public void Actualizar(Empresa empresa)
+        {
+            using var conexion = new SqliteConnection(BaseDatos.CadenaConexion);
+            conexion.Open();
 
+            var cmd = conexion.CreateCommand();
+            cmd.CommandText = @"
+        UPDATE Empresas
+           SET Nombre = $nombre,
+               Rif = $rif,
+               Sector = $sector,
+               CantidadEmpleados = $empleados,
+               Direccion = $direccion,
+               Telefono = $telefono
+         WHERE Id = $id";
+
+            cmd.Parameters.AddWithValue("$id", empresa.Id);
+            cmd.Parameters.AddWithValue("$nombre", empresa.Nombre);
+            cmd.Parameters.AddWithValue("$rif", empresa.Rif);
+            cmd.Parameters.AddWithValue("$sector", empresa.Sector ?? "");
+            cmd.Parameters.AddWithValue("$empleados", empresa.CantidadEmpleados);
+            cmd.Parameters.AddWithValue("$direccion", empresa.Direccion ?? "");
+            cmd.Parameters.AddWithValue("$telefono", empresa.Telefono ?? "");
+
+            cmd.ExecuteNonQuery();
+        }
 
     }
 }
