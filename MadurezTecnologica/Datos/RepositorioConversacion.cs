@@ -135,6 +135,17 @@ namespace MadurezTecnologica.Datos
             return count > 0; // se devuelve true si el conteo es mayor que 0, lo que indica que la conversación existe, de lo contrario se devuelve false
         }
 
+        public void Eliminar(int id)
+        {
+            using var conexion = new SqliteConnection(BaseDatos.CadenaConexion);
+            conexion.Open();
+
+            var cmd = conexion.CreateCommand();
+            cmd.CommandText = "DELETE FROM Conversaciones WHERE Id = $id";
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.ExecuteNonQuery();
+        }
+
         public Conversacion? ObtenerUltimaPorEmpresa(int empresaId) // devuelve la conversación más reciente de una empresa
         {
             using var conexion = new SqliteConnection(BaseDatos.CadenaConexion);

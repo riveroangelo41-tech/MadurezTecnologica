@@ -134,7 +134,7 @@ namespace MadurezTecnologica.Presentacion
 
         private void CrearPanelCentral()
         {
-            panelCentral = new Panel
+            panelCentral = new BufferedPanel
             {
                 Dock = DockStyle.Fill,
                 BackColor = Paleta.GrisClaro,
@@ -156,34 +156,49 @@ namespace MadurezTecnologica.Presentacion
             panelCentral.Controls.Add(lblPlaceholder);
         }
 
+        private bool _animandoVista = false;
+        private Button? _botonActivoActual = null;
+
         private void CambiarVista(Button botonClickeado, string nombreVista)
         {
+            if (_animandoVista) return;
+
+            // Si ya estoy en esa vista, no hago nada
+            if (_botonActivoActual == botonClickeado) return;
+
             EstablecerBotonActivo(botonClickeado);
-            panelCentral.Controls.Clear();
+            _botonActivoActual = botonClickeado;
 
+            Control nuevaVista = CrearVistaParaBoton(botonClickeado, nombreVista);
+
+            if (panelCentral.Controls.Count == 0)
+            {
+                panelCentral.Controls.Add(nuevaVista);
+                return;
+            }
+
+            Control vistaAnterior = panelCentral.Controls[0];
+            AnimarTransicionVista(vistaAnterior, nuevaVista);
+        }
+
+        private Control CrearVistaParaBoton(Button botonClickeado, string nombreVista)
+        {
             if (botonClickeado == btnChat)
-            {
-                var vistaChat = new MadurezTecnologica.Vistas.VistaChat();
-                panelCentral.Controls.Add(vistaChat);
-                return;
-            }
+                return new MadurezTecnologica.Vistas.VistaChat();
 
-            if (botonClickeado == btnEmpresas)    // ← AGREGAR ESTE BLOQUE
-            {
-                var vistaEmpresas = new MadurezTecnologica.Vistas.VistaEmpresas();
-                panelCentral.Controls.Add(vistaEmpresas);
-                return;
-            }
+            if (botonClickeado == btnEmpresas)
+                return new MadurezTecnologica.Vistas.VistaEmpresas();
 
             if (botonClickeado == btnCargarInforme)
-            {
-                var vistaCargarInforme = new MadurezTecnologica.Vistas.VistaCargarInforme();
-                panelCentral.Controls.Add(vistaCargarInforme);
-                return;
-            }
+                return new MadurezTecnologica.Vistas.VistaCargarInforme();
 
-            // Resto de vistas: placeholder por ahora
-            var lbl = new Label
+            if (botonClickeado == btnResultados)
+                return new MadurezTecnologica.Vistas.VistaResultados();
+
+            if (botonClickeado == btnHistorial)
+                return new MadurezTecnologica.Vistas.VistaHistorial();
+
+            return new Label
             {
                 Text = $"Vista: {nombreVista}\n\n(Se construirá próximamente)",
                 Font = new Font("Segoe UI", 14, FontStyle.Bold),
@@ -191,7 +206,69 @@ namespace MadurezTecnologica.Presentacion
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter
             };
-            panelCentral.Controls.Add(lbl);
+        }
+
+        private void AnimarTransicionVista(Control vistaAnterior, Control nuevaVista)
+        {
+            _animandoVista = true;
+
+            int anchoTotal = panelCentral.ClientSize.Width;
+            int altoTotal = panelCentral.ClientSize.Height;
+
+            panelCentral.SuspendLayout();
+
+            vistaAnterior.Dock = DockStyle.None;
+            vistaAnterior.Size = new Size(anchoTotal, altoTotal);
+            vistaAnterior.Location = new Point(0, 0);
+
+            nuevaVista.Dock = DockStyle.None;
+            nuevaVista.Size = new Size(anchoTotal, altoTotal);
+            nuevaVista.Location = new Point(anchoTotal, 0);
+
+            panelCentral.Controls.Add(nuevaVista);
+            panelCentral.ResumeLayout(false);
+
+            int totalPasos = 30;
+            int paso = 0;
+            var cronometro = System.Diagnostics.Stopwatch.StartNew();
+            int duracionMs = 320;
+
+            var timer = new System.Windows.Forms.Timer { Interval = 8 };
+
+            timer.Tick += (s, e) =>
+            {
+                paso++;
+                double t = Math.Min(1.0, cronometro.ElapsedMilliseconds / (double)duracionMs);
+                double eased = 1 - Math.Pow(1 - t, 5);
+                int offset = (int)(anchoTotal * eased);
+
+                vistaAnterior.SuspendLayout();
+                nuevaVista.SuspendLayout();
+
+                vistaAnterior.Location = new Point(-offset, 0);
+                nuevaVista.Location = new Point(anchoTotal - offset, 0);
+
+                vistaAnterior.ResumeLayout(false);
+                nuevaVista.ResumeLayout(false);
+
+                if (t >= 1.0 || paso >= totalPasos)
+                {
+                    timer.Stop();
+                    timer.Dispose();
+                    cronometro.Stop();
+
+                    panelCentral.SuspendLayout();
+                    panelCentral.Controls.Remove(vistaAnterior);
+                    vistaAnterior.Dispose();
+
+                    nuevaVista.Location = new Point(0, 0);
+                    nuevaVista.Dock = DockStyle.Fill;
+                    panelCentral.ResumeLayout(true);
+
+                    _animandoVista = false;
+                }
+            };
+            timer.Start();
         }
 
         private void EstablecerBotonActivo(Button botonNuevo)
@@ -222,6 +299,21 @@ namespace MadurezTecnologica.Presentacion
         {
             // Simulamos un click en el botón del menú lateral
             CambiarVista(btnChat, "Análisis con IA (Chat)");
+        }
+    }
+
+    // Panel con doble buffer activado para animaciones sin parpadeo
+    public class BufferedPanel : Panel
+    {
+        public BufferedPanel()
+        {
+            SetStyle(
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw,
+                true);
+            UpdateStyles();
         }
     }
 }

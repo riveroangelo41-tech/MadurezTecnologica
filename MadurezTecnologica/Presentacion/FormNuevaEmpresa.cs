@@ -55,9 +55,20 @@ namespace MadurezTecnologica.Presentacion
             Size = new Size(560, 720);
             StartPosition = FormStartPosition.CenterParent;
             BackColor = Color.White;
-            FormBorderStyle = FormBorderStyle.FixedDialog;
+            FormBorderStyle = FormBorderStyle.None;
             MaximizeBox = false;
             MinimizeBox = false;
+            ShowInTaskbar = false;
+
+            // Esquinas redondeadas del form
+            Load += (s, e) => Paleta.AplicarBordeRedondeadoSuave(this, 14);
+
+            // Borde sutil del form
+            Paint += (s, e) =>
+            {
+                using var pen = new Pen(Color.FromArgb(195, 188, 210), 1);
+                e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+            };
         }
 
         // =====================================================
@@ -102,7 +113,7 @@ namespace MadurezTecnologica.Presentacion
                 Font = new Font("Segoe UI", 16, FontStyle.Bold),
                 ForeColor = Paleta.TextoBlanco,
                 Location = new Point(100, 28),
-                Size = new Size(420, 28),
+                Size = new Size(380, 28),
                 BackColor = Color.Transparent
             };
             panelCabecera.Controls.Add(lblTitulo);
@@ -115,10 +126,46 @@ namespace MadurezTecnologica.Presentacion
                 Font = new Font("Segoe UI", 9),
                 ForeColor = Color.FromArgb(220, 255, 255, 255),
                 Location = new Point(102, 58),
-                Size = new Size(420, 20),
+                Size = new Size(380, 20),
                 BackColor = Color.Transparent
             };
             panelCabecera.Controls.Add(lblSubtitulo);
+
+            // === Botón cerrar (X) ===
+            var btnCerrar = new Label
+            {
+                Text = "✕",
+                Font = new Font("Segoe UI", 14, FontStyle.Bold),
+                ForeColor = Color.FromArgb(220, 200, 230),
+                Size = new Size(36, 36),
+                Location = new Point(panelCabecera.Width - 50, 12),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+            btnCerrar.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
+            btnCerrar.MouseEnter += (s, e) => btnCerrar.ForeColor = Color.White;
+            btnCerrar.MouseLeave += (s, e) => btnCerrar.ForeColor = Color.FromArgb(220, 200, 230);
+            panelCabecera.Controls.Add(btnCerrar);
+
+            // Drag por la cabecera (form borderless)
+            bool arrastrando = false;
+            Point puntoInicio = Point.Empty;
+            void OnDown(object? s, MouseEventArgs e) { arrastrando = true; puntoInicio = e.Location; }
+            void OnMove(object? s, MouseEventArgs e)
+            {
+                if (arrastrando)
+                    Location = new Point(Location.X + e.X - puntoInicio.X, Location.Y + e.Y - puntoInicio.Y);
+            }
+            void OnUp(object? s, MouseEventArgs e) { arrastrando = false; }
+
+            panelCabecera.MouseDown += OnDown;
+            panelCabecera.MouseMove += OnMove;
+            panelCabecera.MouseUp += OnUp;
+            lblTitulo.MouseDown += OnDown;
+            lblTitulo.MouseMove += OnMove;
+            lblTitulo.MouseUp += OnUp;
         }
 
         // =====================================================
@@ -238,48 +285,48 @@ namespace MadurezTecnologica.Presentacion
             txtNombre = CrearTextBox();
             txtNombre.MaxLength = 100;
             lblErrorNombre = CrearLabelError();
-            yActual = CrearCampo(panelCampos, "Nombre de la empresa", "*", txtNombre, lblErrorNombre, yActual);
+            yActual = CrearCampo(panelCampos, "🏢  Nombre de la empresa", "*", txtNombre, lblErrorNombre, yActual);
 
             // --- RIF ---
             txtRif = CrearTextBox();
             txtRif.MaxLength = 15;
             RestringirARif(txtRif);
             lblErrorRif = CrearLabelError();
-            yActual = CrearCampo(panelCampos, "RIF (ej. J-12345678-9)", "*", txtRif, lblErrorRif, yActual);
+            yActual = CrearCampo(panelCampos, "🆔  RIF (ej. J-12345678-9)", "*", txtRif, lblErrorRif, yActual);
 
             // --- Sector ---
             txtSector = CrearTextBox();
             txtSector.MaxLength = 80;
             lblErrorSector = CrearLabelError();
-            yActual = CrearCampo(panelCampos, "Sector / Rubro", "*", txtSector, lblErrorSector, yActual);
+            yActual = CrearCampo(panelCampos, "💼  Sector / Rubro", "*", txtSector, lblErrorSector, yActual);
 
             // --- Empleados ---
             numEmpleados = new NumericUpDown
             {
                 Font = new Font("Segoe UI", 10),
                 ForeColor = Paleta.TextoOscuro,
-                BackColor = ColorTranslator.FromHtml("#F0EDF5"),
-                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = ColorTranslator.FromHtml("#F5F2F8"),
+                BorderStyle = BorderStyle.None,
                 Size = new Size(485, 32),
                 Minimum = 1,
                 Maximum = 100000,
                 Value = 1
             };
             lblErrorEmpleados = CrearLabelError();
-            yActual = CrearCampo(panelCampos, "Cantidad de empleados", "*", numEmpleados, lblErrorEmpleados, yActual);
+            yActual = CrearCampo(panelCampos, "👥  Cantidad de empleados", "*", numEmpleados, lblErrorEmpleados, yActual);
 
             // --- Teléfono ---
             txtTelefono = CrearTextBox();
             txtTelefono.MaxLength = 20;
             RestringirATelefono(txtTelefono);
-            yActual = CrearCampo(panelCampos, "Teléfono", "", txtTelefono, null, yActual);
+            yActual = CrearCampo(panelCampos, "📞  Teléfono", "", txtTelefono, null, yActual);
 
             // --- Dirección (multiline) ---
             txtDireccion = CrearTextBox();
             txtDireccion.Multiline = true;
             txtDireccion.Height = 65;
             txtDireccion.MaxLength = 250;
-            yActual = CrearCampo(panelCampos, "Dirección", "", txtDireccion, null, yActual);
+            yActual = CrearCampo(panelCampos, "📍  Dirección", "", txtDireccion, null, yActual);
         }
 
         // =====================================================
@@ -287,14 +334,61 @@ namespace MadurezTecnologica.Presentacion
         // =====================================================
         private TextBox CrearTextBox()
         {
-            return new TextBox
+            var txt = new TextBox
             {
                 Font = new Font("Segoe UI", 10),
                 ForeColor = Paleta.TextoOscuro,
-                BackColor = ColorTranslator.FromHtml("#F0EDF5"),
-                BorderStyle = BorderStyle.FixedSingle,
-                Size = new Size(485, 32)
+                BackColor = ColorTranslator.FromHtml("#F5F2F8"),
+                BorderStyle = BorderStyle.None,
+                Size = new Size(485, 26)
             };
+            return txt;
+        }
+
+        // Envuelve un TextBox/control en un Panel con bordes redondeados y focus state
+        private Panel EnvolverEnPanel(Control input)
+        {
+            int alturaPanel = input.Height + 16;
+            if (input is TextBox tb && tb.Multiline)
+                alturaPanel = input.Height + 16;
+
+            var wrapper = new Panel
+            {
+                Size = new Size(485, alturaPanel),
+                BackColor = ColorTranslator.FromHtml("#F5F2F8"),
+                Padding = new Padding(14, 8, 14, 8)
+            };
+            wrapper.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(wrapper, 10);
+            Paleta.AplicarBordeRedondeadoSuave(wrapper, 10);
+
+            // Border dinámico (focus state)
+            Color bordeNormal = Color.FromArgb(220, 215, 230);
+            Color bordeFocus = Paleta.MoradoOscuro;
+            bool tieneFoco = false;
+
+            wrapper.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                int r = 10;
+                using var path = new System.Drawing.Drawing2D.GraphicsPath();
+                path.AddArc(0, 0, r * 2, r * 2, 180, 90);
+                path.AddArc(wrapper.Width - r * 2 - 1, 0, r * 2, r * 2, 270, 90);
+                path.AddArc(wrapper.Width - r * 2 - 1, wrapper.Height - r * 2 - 1, r * 2, r * 2, 0, 90);
+                path.AddArc(0, wrapper.Height - r * 2 - 1, r * 2, r * 2, 90, 90);
+                path.CloseFigure();
+                using var pen = new Pen(tieneFoco ? bordeFocus : bordeNormal, tieneFoco ? 2 : 1);
+                g.DrawPath(pen, path);
+            };
+
+            input.Dock = DockStyle.Fill;
+            input.BackColor = ColorTranslator.FromHtml("#F5F2F8");
+            wrapper.Controls.Add(input);
+
+            input.GotFocus += (s, e) => { tieneFoco = true; wrapper.Invalidate(); };
+            input.LostFocus += (s, e) => { tieneFoco = false; wrapper.Invalidate(); };
+
+            return wrapper;
         }
 
         private Label CrearLabelError()
@@ -311,12 +405,41 @@ namespace MadurezTecnologica.Presentacion
 
         private int CrearCampo(Panel padre, string etiqueta, string asterisco, Control input, Label? errorLabel, int y)
         {
+            // Separar el icono del texto: el primer carácter es el icono
+            string icono = "";
+            string textoLabel = etiqueta;
+            if (etiqueta.Length > 2 && etiqueta[1] == ' ' || etiqueta.Length > 2 && etiqueta[0] >= 0x2700)
+            {
+                int splitIdx = etiqueta.IndexOf("  ");
+                if (splitIdx > 0)
+                {
+                    icono = etiqueta.Substring(0, splitIdx);
+                    textoLabel = etiqueta.Substring(splitIdx + 2);
+                }
+            }
+
+            int xTexto = 5;
+            if (!string.IsNullOrEmpty(icono))
+            {
+                // Cuadrado morado pequeño como marker (más limpio que emoji)
+                var marker = new Panel
+                {
+                    Size = new Size(4, 16),
+                    Location = new Point(5, y + 2),
+                    BackColor = Paleta.MoradoOscuro
+                };
+                marker.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(marker, 2);
+                Paleta.AplicarBordeRedondeadoSuave(marker, 2);
+                padre.Controls.Add(marker);
+                xTexto = 16;
+            }
+
             var lblEtiqueta = new Label
             {
-                Text = etiqueta,
-                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                Text = textoLabel,
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
                 ForeColor = Paleta.TextoOscuro,
-                Location = new Point(5, y),
+                Location = new Point(xTexto, y),
                 AutoSize = true,
                 BackColor = Color.Transparent
             };
@@ -327,28 +450,39 @@ namespace MadurezTecnologica.Presentacion
                 var lblAsterisco = new Label
                 {
                     Text = " " + asterisco,
-                    Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                    Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
                     ForeColor = Color.FromArgb(200, 50, 50),
-                    Location = new Point(5 + TextRenderer.MeasureText(etiqueta, lblEtiqueta.Font).Width, y),
+                    Location = new Point(xTexto + TextRenderer.MeasureText(textoLabel, lblEtiqueta.Font).Width, y),
                     AutoSize = true,
                     BackColor = Color.Transparent
                 };
                 padre.Controls.Add(lblAsterisco);
             }
 
-            input.Location = new Point(5, y + 22);
-            padre.Controls.Add(input);
+            // Envolver el input en panel con bordes redondeados (excepto NumericUpDown que tiene su propio render)
+            Control elementoVisual;
+            if (input is TextBox)
+            {
+                elementoVisual = EnvolverEnPanel(input);
+            }
+            else
+            {
+                elementoVisual = input;
+            }
 
-            int yFinal = y + 22 + input.Height + 5;
+            elementoVisual.Location = new Point(5, y + 24);
+            padre.Controls.Add(elementoVisual);
+
+            int yFinal = y + 24 + elementoVisual.Height + 6;
 
             if (errorLabel != null)
             {
-                errorLabel.Location = new Point(5, yFinal);
+                errorLabel.Location = new Point(8, yFinal);
                 padre.Controls.Add(errorLabel);
                 yFinal += 18;
             }
 
-            return yFinal + 8;
+            return yFinal + 10;
         }
 
         // =====================================================
@@ -438,8 +572,8 @@ namespace MadurezTecnologica.Presentacion
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error al guardar la empresa:\n\n{ex.Message}",
-                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Estilos.MensajeApp.Error($"Error al guardar la empresa:\n\n{ex.Message}",
+                    "Error", this);
             }
         }
 

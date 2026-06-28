@@ -24,45 +24,93 @@ namespace MadurezTecnologica.Inteligencia
 
         public static bool _modoOfflineForzado = false; // variable para almacenar el estado del modo offline forzado
 
-        public static void ActivarModoOfflineForzado() // metodo para activar el modo offline forzado
+        // Evento global que se dispara cuando el modo cambia.
+        // Todos los IndicadorModoConexion se suscriben para mantenerse sincronizados.
+        public static event Action? ModoCambio;
+
+        public static void ActivarModoOfflineForzado()
         {
+            if (_modoOfflineForzado) return;
             _modoOfflineForzado = true;
+            InvalidarCacheConexion();
+            ModoCambio?.Invoke();
         }
 
-        public static void DesactivarModoOfflineForzado() // metodo para desactivar el modo offline forzado
+        public static void DesactivarModoOfflineForzado()
         {
+            if (!_modoOfflineForzado) return;
             _modoOfflineForzado = false;
+            InvalidarCacheConexion();
+            ModoCambio?.Invoke();
         }
 
-        public static bool EstarForzadoOffline() // metodo para verificar si el modo offline forzado está activo
-        {  return _modoOfflineForzado;
-        
-        
-        
-        
-        }
-           
-        public async Task <bool> HayInternet()
+        public static void AlternarModoOfflineForzado()
         {
-            //Nivel 1: Verificacion rapida de la terjeta de internet
+            _modoOfflineForzado = !_modoOfflineForzado;
+            InvalidarCacheConexion();
+            ModoCambio?.Invoke();
+        }
+
+        public static bool EstarForzadoOffline() => _modoOfflineForzado;
+           
+        // Caché del resultado de HayInternet: evita golpear la red en cada llamada.
+        // Las llamadas dentro del TTL devuelven el último resultado sin consultar.
+        private static bool? _cacheHayInternet = null;
+        private static DateTime _cacheHayInternetTimestamp = DateTime.MinValue;
+        private static readonly TimeSpan _cacheTTL = TimeSpan.FromSeconds(30);
+        private static readonly object _cacheLock = new object();
+
+        public static void InvalidarCacheConexion()
+        {
+            lock (_cacheLock)
+            {
+                _cacheHayInternet = null;
+                _cacheHayInternetTimestamp = DateTime.MinValue;
+            }
+        }
+
+        public async Task<bool> HayInternet()
+        {
+            // 1. Si el caché está fresco, devolver el resultado guardado
+            lock (_cacheLock)
+            {
+                if (_cacheHayInternet.HasValue &&
+                    DateTime.Now - _cacheHayInternetTimestamp < _cacheTTL)
+                {
+                    return _cacheHayInternet.Value;
+                }
+            }
+
+            // 2. Caché expirado o no inicializado → consultar realmente
+            bool resultado;
+
+            // Nivel 1: Verificación rápida de la tarjeta de internet
             if (!NetworkInterface.GetIsNetworkAvailable())
             {
-                return false; // No hay conexión de red
+                resultado = false;
             }
-
-            //Nivel 2: Intentar hacer una solicitud HTTP real a  un servidor confiable para verificar la conectividad a internet
-            try
+            else
             {
-                var response = await _httpClient.GetAsync("https://www.google.com/generate_204");
-                return response.IsSuccessStatusCode; // Si la respuesta es exitosa, hay conexión a internet
+                // Nivel 2: Solicitud HTTP a un servidor confiable
+                try
+                {
+                    var response = await _httpClient.GetAsync("https://www.google.com/generate_204");
+                    resultado = response.IsSuccessStatusCode;
+                }
+                catch
+                {
+                    resultado = false;
+                }
             }
-            catch
+
+            // 3. Guardar en caché para los próximos 30 segundos
+            lock (_cacheLock)
             {
-                return false; // Si ocurre una excepción, no hay conexión a internet
+                _cacheHayInternet = resultado;
+                _cacheHayInternetTimestamp = DateTime.Now;
             }
 
-
-
+            return resultado;
         }
 
         public async Task<ModoOperacion> DetectarModo() // metodo para detectar el modo de operación actual

@@ -58,7 +58,7 @@ namespace MadurezTecnologica.Logica
 
     
        
-        public Diagnostico AnalizarTexto(string textoInforme, Empresa empresa) 
+        public Diagnostico AnalizarTexto(string textoInforme, Empresa empresa)
         {
             if (string.IsNullOrWhiteSpace(textoInforme))
             {
@@ -86,7 +86,7 @@ namespace MadurezTecnologica.Logica
                 Fortalezas = GenerarFortalezas(nivelDeterminado),
                 Debilidades = GenerarDebilidades(nivelDeterminado),
                 Riesgos = GenerarRiesgos(nivelDeterminado),
-                Recomendaciones = GenerarRecomendaciones(nivelDeterminado),
+                Recomendaciones = GenerarRecomendacionesPorGaps(textoNormalizado, nivelDeterminado),
                 FechaGeneracion = DateTime.Now,
                 EsFinal = false
             };
@@ -248,6 +248,156 @@ namespace MadurezTecnologica.Logica
                 case 5: return "- Riesgo de complacencia en alto nivel actual.";
                 default: return "- Información insuficiente para determinar riesgos.";
             }
+        }
+
+        // === RECOMENDACIONES PERSONALIZADAS por gaps detectados ===
+        // Identifica qué keywords del nivel SIGUIENTE no están en el texto
+        // y genera recomendaciones específicas para esos gaps.
+        private string GenerarRecomendacionesPorGaps(string textoNormalizado, int nivelActual)
+        {
+            // Nivel 5 ya es el máximo: usar plantillas genéricas
+            if (nivelActual >= 5) return GenerarRecomendaciones(nivelActual);
+
+            int nivelSiguiente = nivelActual + 1;
+            string[] keywordsNivelSiguiente = nivelSiguiente switch
+            {
+                2 => _keywordsNivel2,
+                3 => _keywordsNivel3,
+                4 => _keywordsNivel4,
+                5 => _keywordsNivel5,
+                _ => Array.Empty<string>()
+            };
+
+            // Buscar gaps: keywords del nivel siguiente que NO aparecen en el texto
+            var gaps = new List<string>();
+            foreach (var kw in keywordsNivelSiguiente)
+            {
+                if (!textoNormalizado.Contains(kw))
+                    gaps.Add(kw);
+            }
+
+            // Si por alguna razón no hay gaps (ya tienes todo del nivel siguiente),
+            // usar las recomendaciones genéricas
+            if (gaps.Count == 0) return GenerarRecomendaciones(nivelActual);
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"Para avanzar del nivel {nivelActual} al nivel {nivelSiguiente}, " +
+                          $"el informe sugiere implementar las siguientes prácticas que aún no detectamos:");
+            sb.AppendLine();
+
+            // Tomar los primeros gaps relevantes (con descripción humana cuando exista)
+            int incluidos = 0;
+            int maxRecomendaciones = 6;
+            foreach (var gap in gaps)
+            {
+                string descripcion = DescribirGap(gap);
+                if (descripcion == null) continue;   // saltar gaps muy técnicos sin descripción
+
+                sb.AppendLine($"- {descripcion}");
+                incluidos++;
+                if (incluidos >= maxRecomendaciones) break;
+            }
+
+            if (incluidos == 0)
+            {
+                // Fallback si ningún gap tenía descripción humana
+                return GenerarRecomendaciones(nivelActual);
+            }
+
+            sb.AppendLine();
+            sb.AppendLine($"Estas recomendaciones provienen del análisis offline. Para un plan de mejora " +
+                          $"más detallado y priorizado, repite el análisis con la IA cuando tengas conexión.");
+
+            return sb.ToString();
+        }
+
+        // Diccionario de descripciones humanas para los keywords más relevantes
+        private string? DescribirGap(string keyword)
+        {
+            return keyword switch
+            {
+                // Nivel 2
+                "git" or "control de versiones" or "github" or "gitlab" or "bitbucket"
+                    => "Implementar control de versiones con Git (GitHub, GitLab o similar) en todos los proyectos",
+                "algunas pruebas" or "pruebas básicas" or "control básico"
+                    => "Establecer pruebas unitarias básicas para componentes críticos",
+                "respaldo manual"
+                    => "Definir una política de respaldos periódicos (aunque sea manual)",
+                "documentación básica"
+                    => "Crear documentación básica de procesos y arquitectura",
+                "metodología básica" or "scrum básico" or "kanban básico"
+                    => "Adoptar una metodología ágil simple (Scrum o Kanban básico)",
+
+                // Nivel 3
+                "scrum"
+                    => "Implementar Scrum como metodología formal (sprints, ceremonias, roles definidos)",
+                "kanban"
+                    => "Adoptar tableros Kanban para visualizar el flujo de trabajo",
+                "metodología formal" or "metodología documentada"
+                    => "Documentar formalmente la metodología de desarrollo en un manual interno",
+                "code review obligatorio" or "revisiones de código obligatorias"
+                    => "Hacer obligatorio el code review en todos los pull requests",
+                "estándares documentados" or "convenciones de código"
+                    => "Definir y documentar convenciones de código (linters, formato, naming)",
+                "documentación de arquitectura"
+                    => "Mantener documentación de arquitectura actualizada (diagramas C4, ADRs)",
+                "iso 27001" or "iso 9001"
+                    => "Considerar certificaciones ISO 27001 (seguridad) o 9001 (calidad)",
+                "ambientes separados" or "staging"
+                    => "Separar ambientes de desarrollo, staging y producción",
+                "ci/cd básico"
+                    => "Implementar un pipeline básico de CI/CD (compilar, testear, deployar)",
+                "sprints"
+                    => "Trabajar en sprints de 2 a 4 semanas con planning y review",
+                "retrospectivas formales"
+                    => "Realizar retrospectivas formales al cierre de cada sprint",
+                "definition of done"
+                    => "Definir y documentar una Definition of Done por equipo",
+
+                // Nivel 4
+                "métricas" or "métrica organizacional" or "indicador cuantitativo"
+                    => "Medir indicadores cuantitativos de procesos (no solo intuitivos)",
+                "kpi" or "kpis"
+                    => "Establecer KPIs organizacionales documentados",
+                "velocity"
+                    => "Medir velocity de los equipos para planificar capacidad",
+                "cycle time"
+                    => "Medir cycle time (de inicio a entrega) para detectar cuellos de botella",
+                "lead time"
+                    => "Medir lead time (de pedido a entrega) para el cliente",
+                "cobertura de pruebas"
+                    => "Medir y mejorar la cobertura de pruebas automatizadas",
+                "defect density"
+                    => "Llevar registro de defect density para detectar áreas problemáticas",
+                "sla" or "slo" or "sli"
+                    => "Definir SLI/SLO/SLA para servicios críticos",
+                "monitoreo activo" or "grafana" or "datadog"
+                    => "Implementar monitoreo activo con dashboards (Grafana, Datadog, etc.)",
+                "sonarqube"
+                    => "Integrar análisis de calidad de código continuo (SonarQube o similar)",
+                "story points" or "planning poker"
+                    => "Estimar trabajo con story points y planning poker",
+
+                // Nivel 5
+                "a/b testing" or "experimentación" or "experimentos en producción"
+                    => "Implementar plataforma de A/B testing y experimentación sistemática",
+                "chaos engineering" or "gremlin"
+                    => "Adoptar Chaos Engineering para validar resiliencia del sistema",
+                "machine learning" or "ml predictivo"
+                    => "Explorar ML predictivo para optimizar procesos",
+                "mejora continua" or "auto-optimización"
+                    => "Automatizar ciclos de mejora continua basados en métricas",
+                "pruebas mutacionales" or "stryker"
+                    => "Implementar pruebas mutacionales para validar la calidad de los tests",
+                "feature flags"
+                    => "Adoptar feature flags para releases controlados",
+                "canary releases" or "blue-green deployment"
+                    => "Implementar canary releases o blue-green deployment",
+                "bug bounty"
+                    => "Considerar un programa de bug bounty para vulnerabilidades",
+
+                _ => null   // gap sin descripción → se ignora
+            };
         }
 
         private string GenerarRecomendaciones(int nivel)

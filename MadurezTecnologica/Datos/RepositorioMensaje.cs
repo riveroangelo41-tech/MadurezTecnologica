@@ -63,6 +63,17 @@ namespace MadurezTecnologica.Datos
             return lista;
 
         }
+        public void EliminarPorConversacion(int conversacionId)
+        {
+            using var conexion = new SqliteConnection(BaseDatos.CadenaConexion);
+            conexion.Open();
+
+            var cmd = conexion.CreateCommand();
+            cmd.CommandText = "DELETE FROM Mensajes WHERE ConversacionId = $convId";
+            cmd.Parameters.AddWithValue("$convId", conversacionId);
+            cmd.ExecuteNonQuery();
+        }
+
         public int ContarPorConversacion(int conversacionId) // Devuelve el número de mensajes en una conversación
             {
           using var conexion = new SqliteConnection(BaseDatos.CadenaConexion);

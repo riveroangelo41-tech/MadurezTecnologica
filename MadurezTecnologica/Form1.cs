@@ -112,14 +112,12 @@ namespace MadurezTecnologica
                 var generador = new MadurezTecnologica.Logica.GeneradorPlantilla();
                 string archivoGenerado = generador.GenerarPlantilla(dialogo.FileName);
 
-                var resultado = MessageBox.Show(
+                bool abrir = Estilos.MensajeApp.Confirmar(
                     $"Plantilla generada exitosamente en:\n{archivoGenerado}\n\n¿Desea abrirla ahora?",
                     "Descarga completa",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Information
-                );
+                    this);
 
-                if (resultado == DialogResult.Yes)
+                if (abrir)
                 {
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
@@ -130,39 +128,31 @@ namespace MadurezTecnologica
             }
             catch (UnauthorizedAccessException)
             {
-                MessageBox.Show(
+                Estilos.MensajeApp.Advertencia(
                     "No tiene permisos para guardar en esa carpeta. Intente con otra ubicación (por ejemplo, su Escritorio).",
                     "Sin permisos",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
-                );
+                    this);
             }
             catch (System.IO.IOException ex) when (ex.Message.Contains("being used"))
             {
-                MessageBox.Show(
+                Estilos.MensajeApp.Advertencia(
                     "El archivo ya está abierto en otro programa. Ciérrelo e intente nuevamente.",
                     "Archivo bloqueado",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
-                );
+                    this);
             }
             catch (System.IO.DirectoryNotFoundException)
             {
-                MessageBox.Show(
+                Estilos.MensajeApp.Advertencia(
                     "La carpeta seleccionada no existe. Por favor seleccione una carpeta válida.",
                     "Carpeta no encontrada",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
-                );
+                    this);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
+                Estilos.MensajeApp.Error(
                     $"Ocurrió un error inesperado al generar la plantilla:\n\n{ex.Message}",
                     "Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
+                    this);
             }
             finally
             {
@@ -183,8 +173,8 @@ namespace MadurezTecnologica
 
             if (!int.TryParse(input, out int conversacionId))
             {
-                MessageBox.Show("Debes ingresar un número válido.",
-                    "ID inválido", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                Estilos.MensajeApp.Advertencia("Debes ingresar un número válido.",
+                    "ID inválido", this);
                 return;
             }
 

@@ -17,7 +17,10 @@ namespace MadurezTecnologica.Estilos
 
         // Variantes
         public static readonly Color MoradoOscuroHover = ColorTranslator.FromHtml("#6B4A95");
-        public static readonly Color VerdeGrisaceoOscuro = ColorTranslator.FromHtml("#527670");  
+        public static readonly Color VerdeGrisaceoOscuro = ColorTranslator.FromHtml("#527670");
+
+        // Inputs y fondos suaves
+        public static readonly Color LilaInput = ColorTranslator.FromHtml("#F0EDF5");  
 
         // DIBUJO CON ANTIALIASING
 

@@ -16,6 +16,7 @@ namespace MadurezTecnologica.Vistas
 
         // Paneles principales
         private Panel panelHeader = null!;
+        private Estilos.IndicadorModoConexion _indicadorConexion = null!;
         private Panel panelContenido = null!;
 
         // Header
@@ -38,6 +39,9 @@ namespace MadurezTecnologica.Vistas
         // Estado del archivo cargado (para más adelante)
         private string? _archivoSeleccionado = null;
 
+        // Orquestador del análisis
+        private Logica.OrquestadorAnalisis _orquestador = null!;
+
         // Controles del estado de la tarjeta 2 (zona drop / archivo cargado)
         private Panel zonaDrop = null!;
         private Panel zonaArchivo = null!;
@@ -54,6 +58,7 @@ namespace MadurezTecnologica.Vistas
                 true);
             this.UpdateStyles();
 
+            _orquestador = new Logica.OrquestadorAnalisis();
             ConfigurarControl();
             CrearPanelContenido();
             CrearHeader();
@@ -117,7 +122,7 @@ namespace MadurezTecnologica.Vistas
             var lblIcono = new Label
             {
                 Text = "📄",
-                Font = new Font("Segoe UI", 18, FontStyle.Bold),
+                Font = new Font("Segoe UI Emoji", 18, FontStyle.Bold),
                 ForeColor = Paleta.TextoBlanco,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -149,6 +154,22 @@ namespace MadurezTecnologica.Vistas
                 BackColor = Color.Transparent
             };
             panelHeader.Controls.Add(lblSubtitulo);
+
+            _indicadorConexion = new Estilos.IndicadorModoConexion
+            {
+                Size = new Size(175, 36)
+            };
+            panelHeader.Controls.Add(_indicadorConexion);
+
+            panelHeader.Resize += (s, e) =>
+            {
+                if (_indicadorConexion != null)
+                    _indicadorConexion.Location = new Point(
+                        panelHeader.Width - _indicadorConexion.Width - 20, 25);
+            };
+            if (_indicadorConexion != null)
+                _indicadorConexion.Location = new Point(
+                    panelHeader.Width - _indicadorConexion.Width - 20, 25);
         }
 
         // ===================================================
@@ -216,26 +237,30 @@ namespace MadurezTecnologica.Vistas
             panelBannerEmpresa = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 60,
-                BackColor = ColorTranslator.FromHtml("#F0EDF5"),
-                Padding = new Padding(15, 10, 15, 10)
+                Height = 80,
+                BackColor = Paleta.LilaInput,
+                Padding = new Padding(20, 15, 20, 15),
+                Margin = new Padding(0, 0, 0, 16)
             };
+            panelBannerEmpresa.Resize += (s, e) =>
+                Paleta.AplicarBordeRedondeadoSuave(panelBannerEmpresa, 14);
             panelContenido.Controls.Add(panelBannerEmpresa);
 
-            // Barra morada del lado izquierdo (visual de "acento")
-            var barraIzq = new Panel
+            // Barra de acento lateral como Panel hijo (no Paint, para que NO se recorte con la región redondeada)
+            var barraAcento = new Panel
             {
-                Dock = DockStyle.Left,
-                Width = 4,
+                Size = new Size(5, 50),
+                Location = new Point(8, 15),
                 BackColor = Paleta.MoradoOscuro
             };
-            panelBannerEmpresa.Controls.Add(barraIzq);
+            barraAcento.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(barraAcento, 2);
+            panelBannerEmpresa.Controls.Add(barraAcento);
 
             // Avatar circular con inicial de la empresa
             var avatar = new Panel
             {
-                Size = new Size(36, 36),
-                Location = new Point(20, 12),
+                Size = new Size(46, 46),
+                Location = new Point(22, 16),
                 BackColor = Paleta.MoradoOscuro
             };
             var pathAv = new System.Drawing.Drawing2D.GraphicsPath();
@@ -246,7 +271,7 @@ namespace MadurezTecnologica.Vistas
             {
                 Name = "lblInicialEmpresa",
                 Text = "?",
-                Font = new Font("Segoe UI", 14, FontStyle.Bold),
+                Font = new Font("Segoe UI", 16, FontStyle.Bold),
                 ForeColor = Paleta.TextoBlanco,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -261,7 +286,7 @@ namespace MadurezTecnologica.Vistas
                 Text = "EMPRESA SELECCIONADA",
                 Font = new Font("Segoe UI", 8, FontStyle.Bold),
                 ForeColor = Color.FromArgb(130, 125, 122),
-                Location = new Point(65, 8),
+                Location = new Point(82, 14),
                 Size = new Size(200, 16),
                 BackColor = Color.Transparent
             };
@@ -270,39 +295,56 @@ namespace MadurezTecnologica.Vistas
             // Nombre de la empresa
             lblNombreEmpresa = new Label
             {
-                Text = "Sin empresa seleccionada",
+                Text = "Sin empresa seleccionada — ve a 'Empresas' para elegir una",
                 Font = new Font("Segoe UI", 11, FontStyle.Bold),
                 ForeColor = Paleta.TextoOscuro,
-                Location = new Point(65, 26),
+                Location = new Point(82, 32),
                 Size = new Size(700, 22),
                 BackColor = Color.Transparent
             };
             panelBannerEmpresa.Controls.Add(lblNombreEmpresa);
+
+            // Subtítulo con detalles (RIF, sector) — se muestra solo cuando hay empresa
+            var lblDetalles = new Label
+            {
+                Name = "lblDetallesEmpresa",
+                Text = "",
+                Font = new Font("Segoe UI", 8.5f),
+                ForeColor = Color.FromArgb(125, 120, 117),
+                Location = new Point(82, 53),
+                Size = new Size(700, 18),
+                BackColor = Color.Transparent
+            };
+            panelBannerEmpresa.Controls.Add(lblDetalles);
         }
         // ===================================================
         // BOTÓN "ANALIZAR CON IA" (abajo, centrado)
         // ===================================================
+        private Label _lblHintAnalizar = null!;
+
         private void CrearBotonAnalizar()
         {
             var panelBotonContenedor = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = 70,
-                BackColor = Color.White
+                Height = 85,
+                BackColor = Color.White,
+                Padding = new Padding(0, 6, 0, 10)
             };
             panelContenido.Controls.Add(panelBotonContenedor);
 
             btnAnalizar = new Panel
             {
-                BackColor = Color.FromArgb(200, 200, 200),  // gris (deshabilitado)
-                Size = new Size(220, 48),
+                BackColor = Color.FromArgb(195, 190, 200),
+                Size = new Size(260, 48),
                 Cursor = Cursors.Default
             };
+            btnAnalizar.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(btnAnalizar, 24);
 
             lblBtnAnalizar = new Label
             {
                 Text = "⚡  Analizar con IA",
-                Font = new Font("Segoe UI", 11, FontStyle.Bold),
+                Font = new Font("Segoe UI Emoji", 11.5f, FontStyle.Bold),
                 ForeColor = Paleta.TextoBlanco,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -310,21 +352,29 @@ namespace MadurezTecnologica.Vistas
             };
             btnAnalizar.Controls.Add(lblBtnAnalizar);
 
-            // Forma píldora
-            var pathBtn = new System.Drawing.Drawing2D.GraphicsPath();
-            pathBtn.AddArc(0, 0, 48, 48, 90, 180);
-            pathBtn.AddArc(btnAnalizar.Width - 48, 0, 48, 48, 270, 180);
-            pathBtn.CloseFigure();
-            btnAnalizar.Region = new Region(pathBtn);
-
             panelBotonContenedor.Controls.Add(btnAnalizar);
+
+            // Hint debajo del botón — con margin extra para que respire
+            _lblHintAnalizar = new Label
+            {
+                Text = "Selecciona una empresa y sube un PDF para activar el análisis",
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Italic),
+                ForeColor = Color.FromArgb(150, 145, 142),
+                AutoSize = false,
+                Height = 20,
+                Dock = DockStyle.Bottom,
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent,
+                Padding = new Padding(0, 3, 0, 0)
+            };
+            panelBotonContenedor.Controls.Add(_lblHintAnalizar);
 
             // Centrar horizontalmente al redimensionar
             panelBotonContenedor.Resize += (s, e) =>
             {
                 btnAnalizar.Location = new Point(
                     (panelBotonContenedor.Width - btnAnalizar.Width) / 2,
-                    (panelBotonContenedor.Height - btnAnalizar.Height) / 2);
+                    8);
             };
             // Centrado inicial
             panelBotonContenedor.HandleCreated += (s, e) =>
@@ -333,11 +383,44 @@ namespace MadurezTecnologica.Vistas
                 {
                     btnAnalizar.Location = new Point(
                         (panelBotonContenedor.Width - btnAnalizar.Width) / 2,
-                        (panelBotonContenedor.Height - btnAnalizar.Height) / 2);
+                        8);
                 }));
             };
 
-            // El click lo conectaremos en la Tarea 5
+            // Click → analizar con IA
+            EventHandler analizarClick = async (s, e) => await OnAnalizarClick();
+            btnAnalizar.Click += analizarClick;
+            lblBtnAnalizar.Click += analizarClick;
+        }
+
+        // Actualiza el hint según qué falta para habilitar el análisis
+        private void ActualizarHintAnalizar()
+        {
+            if (_lblHintAnalizar == null) return;
+
+            bool hayEmpresa = Estado.EstadoApp.EmpresaActivaId != null;
+            bool hayArchivo = _archivoSeleccionado != null;
+
+            if (hayEmpresa && hayArchivo)
+            {
+                _lblHintAnalizar.Text = "✓  Todo listo — haz clic para analizar";
+                _lblHintAnalizar.ForeColor = ColorTranslator.FromHtml("#4A8F6F");
+            }
+            else if (!hayEmpresa && !hayArchivo)
+            {
+                _lblHintAnalizar.Text = "Selecciona una empresa y sube un PDF para activar el análisis";
+                _lblHintAnalizar.ForeColor = Color.FromArgb(150, 145, 142);
+            }
+            else if (!hayEmpresa)
+            {
+                _lblHintAnalizar.Text = "Falta seleccionar una empresa";
+                _lblHintAnalizar.ForeColor = ColorTranslator.FromHtml("#D4841C");
+            }
+            else
+            {
+                _lblHintAnalizar.Text = "Falta cargar un PDF";
+                _lblHintAnalizar.ForeColor = ColorTranslator.FromHtml("#D4841C");
+            }
         }
         // ===================================================
         // TARJETAS (esqueleto - sin contenido detallado todavía)
@@ -346,21 +429,29 @@ namespace MadurezTecnologica.Vistas
         {
             var tarjeta = new Panel
             {
-                Size = new Size(420, 380),
+                Size = new Size(420, 410),
                 BackColor = ColorTranslator.FromHtml("#F9F5FF"),
-                Padding = new Padding(28, 28, 28, 28)
+                Padding = new Padding(30, 30, 30, 30)
             };
-            Paleta.AplicarBordeRedondeadoSuave(tarjeta, 20);
+            tarjeta.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(tarjeta, 18);
+            Paleta.AplicarBordeRedondeadoSuave(tarjeta, 18);
 
-            // Número del paso (badge "1")
+            // Sombra inferior sutil para dar elevación
+            tarjeta.Paint += (s, e) =>
+            {
+                using var brush = new SolidBrush(Color.FromArgb(15, Paleta.MoradoOscuro));
+                e.Graphics.FillRectangle(brush, 4, tarjeta.Height - 3, tarjeta.Width - 8, 3);
+            };
+
+            // Número del paso (badge "1") — DENTRO de la tarjeta para que no se recorte
             var numero = new Panel
             {
-                Size = new Size(32, 32),
-                Location = new Point(20, -8),
+                Size = new Size(34, 34),
+                Location = new Point(18, 18),
                 BackColor = Paleta.MoradoOscuro
             };
             var pathNum = new System.Drawing.Drawing2D.GraphicsPath();
-            pathNum.AddEllipse(0, 0, 32, 32);
+            pathNum.AddEllipse(0, 0, 34, 34);
             numero.Region = new Region(pathNum);
 
             var lblNum = new Label
@@ -379,10 +470,10 @@ namespace MadurezTecnologica.Vistas
             var lblTitulo = new Label
             {
                 Text = "Descargar plantilla",
-                Font = new Font("Segoe UI", 13, FontStyle.Bold),
+                Font = new Font("Segoe UI", 14, FontStyle.Bold),
                 ForeColor = Paleta.TextoOscuro,
-                Location = new Point(20, 35),
-                Size = new Size(360, 26),
+                Location = new Point(62, 22),
+                Size = new Size(320, 30),
                 BackColor = Color.Transparent
             };
             tarjeta.Controls.Add(lblTitulo);
@@ -392,21 +483,43 @@ namespace MadurezTecnologica.Vistas
             {
                 Text = "Genera la plantilla Word y entrégala a la empresa para que la complete con su información.",
                 Font = new Font("Segoe UI", 9),
-                ForeColor = Color.FromArgb(120, 115, 112),
-                Location = new Point(20, 64),
-                Size = new Size(360, 40),
+                ForeColor = Color.FromArgb(115, 110, 108),
+                Location = new Point(24, 62),
+                Size = new Size(370, 40),
                 BackColor = Color.Transparent
             };
             tarjeta.Controls.Add(lblDesc);
 
-            // === ICONO WORD GRANDE ===
+            // === ICONO WORD CON SOMBRA ===
+            var iconoWordContenedor = new Panel
+            {
+                Size = new Size(110, 110),
+                Location = new Point((420 - 110) / 2, 125),
+                BackColor = Color.Transparent
+            };
+            iconoWordContenedor.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                // Sombra suave detrás del icono
+                using var brushSombra = new SolidBrush(Color.FromArgb(35, 43, 87, 154));
+                var rectSombra = new Rectangle(5, 8, 95, 95);
+                using var pathSombra = new System.Drawing.Drawing2D.GraphicsPath();
+                pathSombra.AddArc(rectSombra.X, rectSombra.Y, 28, 28, 180, 90);
+                pathSombra.AddArc(rectSombra.Right - 28, rectSombra.Y, 28, 28, 270, 90);
+                pathSombra.AddArc(rectSombra.Right - 28, rectSombra.Bottom - 28, 28, 28, 0, 90);
+                pathSombra.AddArc(rectSombra.X, rectSombra.Bottom - 28, 28, 28, 90, 90);
+                pathSombra.CloseFigure();
+                g.FillPath(brushSombra, pathSombra);
+            };
+            tarjeta.Controls.Add(iconoWordContenedor);
+
             var iconoWord = new Panel
             {
-                Size = new Size(90, 90),
-                Location = new Point((420 - 90) / 2, 130),  // centrado horizontalmente
-                BackColor = ColorTranslator.FromHtml("#2B579A")  // azul Word
+                Size = new Size(95, 95),
+                Location = new Point(0, 0),
+                BackColor = ColorTranslator.FromHtml("#2B579A")
             };
-            // Redondear el cuadrado en 14px
             var pathIcono = new System.Drawing.Drawing2D.GraphicsPath();
             int rIcono = 14;
             pathIcono.AddArc(0, 0, rIcono * 2, rIcono * 2, 180, 90);
@@ -419,46 +532,42 @@ namespace MadurezTecnologica.Vistas
             var lblWordLetra = new Label
             {
                 Text = "W",
-                Font = new Font("Segoe UI", 42, FontStyle.Bold),
+                Font = new Font("Segoe UI", 44, FontStyle.Bold),
                 ForeColor = Color.White,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
                 BackColor = Color.Transparent
             };
             iconoWord.Controls.Add(lblWordLetra);
-            tarjeta.Controls.Add(iconoWord);
+            iconoWordContenedor.Controls.Add(iconoWord);
 
             // === INFO BAJO EL ICONO ===
             var lblInfo = new Label
             {
-                Text = "11 secciones sobre procesos, infraestructura,\ncalidad y seguridad",
-                Font = new Font("Segoe UI", 9),
-                ForeColor = Color.FromArgb(100, 95, 92),
-                Location = new Point(40, 230),
-                Size = new Size(340, 36),
+                Text = "📋  11 secciones · procesos, infraestructura, calidad y seguridad",
+                Font = new Font("Segoe UI Emoji", 8.5f),
+                ForeColor = Color.FromArgb(95, 90, 88),
+                Location = new Point(20, 255),
+                Size = new Size(380, 18),
                 TextAlign = ContentAlignment.MiddleCenter,
                 BackColor = Color.Transparent
             };
             tarjeta.Controls.Add(lblInfo);
 
-            // === BOTÓN "DESCARGAR PLANTILLA WORD" (Panel + Label) ===
+            // === BOTÓN "DESCARGAR PLANTILLA WORD" ===
             var btnDescargar = new Panel
             {
-                Size = new Size(220, 40),
-                Location = new Point((420 - 220) / 2, 280),  // centrado horizontalmente
+                Size = new Size(240, 44),
+                Location = new Point((420 - 240) / 2, 295),
                 BackColor = Paleta.MoradoOscuro,
                 Cursor = Cursors.Hand
             };
-            var pathBtn = new System.Drawing.Drawing2D.GraphicsPath();
-            pathBtn.AddArc(0, 0, 40, 40, 90, 180);
-            pathBtn.AddArc(btnDescargar.Width - 40, 0, 40, 40, 270, 180);
-            pathBtn.CloseFigure();
-            btnDescargar.Region = new Region(pathBtn);
+            btnDescargar.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(btnDescargar, 22);
 
             var lblBtnDescargar = new Label
             {
-                Text = "📥  Descargar plantilla Word",
-                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                Text = "📥   Descargar plantilla Word",
+                Font = new Font("Segoe UI Emoji", 10, FontStyle.Bold),
                 ForeColor = Paleta.TextoBlanco,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -467,15 +576,19 @@ namespace MadurezTecnologica.Vistas
             };
             btnDescargar.Controls.Add(lblBtnDescargar);
 
-            // Hover
+            // Hover + Press
             Color colorNormal = Paleta.MoradoOscuro;
             Color colorHover = Paleta.MoradoOscuroHover;
+            Color colorPress = Color.FromArgb(60, 40, 90);
             btnDescargar.MouseEnter += (s, e) => btnDescargar.BackColor = colorHover;
             btnDescargar.MouseLeave += (s, e) => btnDescargar.BackColor = colorNormal;
             lblBtnDescargar.MouseEnter += (s, e) => btnDescargar.BackColor = colorHover;
             lblBtnDescargar.MouseLeave += (s, e) => btnDescargar.BackColor = colorNormal;
+            btnDescargar.MouseDown += (s, e) => btnDescargar.BackColor = colorPress;
+            btnDescargar.MouseUp += (s, e) => btnDescargar.BackColor = colorHover;
+            lblBtnDescargar.MouseDown += (s, e) => btnDescargar.BackColor = colorPress;
+            lblBtnDescargar.MouseUp += (s, e) => btnDescargar.BackColor = colorHover;
 
-            // Click → descargar plantilla
             EventHandler descargarClick = (s, e) => OnDescargarPlantillaClick();
             btnDescargar.Click += descargarClick;
             lblBtnDescargar.Click += descargarClick;
@@ -485,10 +598,10 @@ namespace MadurezTecnologica.Vistas
             // Formato info
             var lblFormato = new Label
             {
-                Text = "Formato: .docx",
-                Font = new Font("Segoe UI", 8),
-                ForeColor = Color.FromArgb(160, 155, 152),
-                Location = new Point(40, 330),
+                Text = "Formato: .docx  ·  ~45 KB",
+                Font = new Font("Segoe UI", 8, FontStyle.Italic),
+                ForeColor = Color.FromArgb(155, 150, 148),
+                Location = new Point(40, 358),
                 Size = new Size(340, 18),
                 TextAlign = ContentAlignment.MiddleCenter,
                 BackColor = Color.Transparent
@@ -502,21 +615,28 @@ namespace MadurezTecnologica.Vistas
         {
             var tarjeta = new Panel
             {
-                Size = new Size(420, 380),
+                Size = new Size(420, 410),
                 BackColor = Color.White,
-                Padding = new Padding(28, 28, 28, 28)
+                Padding = new Padding(30, 30, 30, 30)
             };
-            Paleta.AplicarBordeRedondeadoSuave(tarjeta, 20);
+            tarjeta.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(tarjeta, 18);
+            Paleta.AplicarBordeRedondeadoSuave(tarjeta, 18);
+
+            tarjeta.Paint += (s, e) =>
+            {
+                using var brush = new SolidBrush(Color.FromArgb(15, Paleta.MoradoOscuro));
+                e.Graphics.FillRectangle(brush, 4, tarjeta.Height - 3, tarjeta.Width - 8, 3);
+            };
 
             // Número "2"
             var numero = new Panel
             {
-                Size = new Size(32, 32),
-                Location = new Point(20, -8),
+                Size = new Size(34, 34),
+                Location = new Point(18, 18),
                 BackColor = Paleta.MoradoOscuro
             };
             var pathNum = new System.Drawing.Drawing2D.GraphicsPath();
-            pathNum.AddEllipse(0, 0, 32, 32);
+            pathNum.AddEllipse(0, 0, 34, 34);
             numero.Region = new Region(pathNum);
 
             var lblNum = new Label
@@ -535,10 +655,10 @@ namespace MadurezTecnologica.Vistas
             var lblTitulo = new Label
             {
                 Text = "Subir plantilla completada",
-                Font = new Font("Segoe UI", 13, FontStyle.Bold),
+                Font = new Font("Segoe UI", 14, FontStyle.Bold),
                 ForeColor = Paleta.TextoOscuro,
-                Location = new Point(20, 35),
-                Size = new Size(360, 26),
+                Location = new Point(62, 22),
+                Size = new Size(320, 30),
                 BackColor = Color.Transparent
             };
             tarjeta.Controls.Add(lblTitulo);
@@ -548,21 +668,21 @@ namespace MadurezTecnologica.Vistas
             {
                 Text = "Una vez llenada por la empresa, conviértela a PDF y súbela aquí para el análisis.",
                 Font = new Font("Segoe UI", 9),
-                ForeColor = Color.FromArgb(120, 115, 112),
-                Location = new Point(20, 64),
-                Size = new Size(360, 40),
+                ForeColor = Color.FromArgb(115, 110, 108),
+                Location = new Point(24, 62),
+                Size = new Size(370, 40),
                 BackColor = Color.Transparent
             };
             tarjeta.Controls.Add(lblDesc);
 
-            // === ZONA DROP (visible inicialmente, cuando NO hay archivo) ===
+            // === ZONA DROP ===
             zonaDrop = CrearZonaDrop();
-            zonaDrop.Location = new Point(15, 120);
+            zonaDrop.Location = new Point(15, 115);
             tarjeta.Controls.Add(zonaDrop);
 
-            // === ZONA "ARCHIVO CARGADO" (oculta inicialmente) ===
+            // === ZONA "ARCHIVO CARGADO" ===
             zonaArchivo = CrearZonaArchivo();
-            zonaArchivo.Location = new Point(15, 120);
+            zonaArchivo.Location = new Point(15, 115);
             zonaArchivo.Visible = false;
             tarjeta.Controls.Add(zonaArchivo);
 
@@ -574,23 +694,29 @@ namespace MadurezTecnologica.Vistas
         // ===================================================
         private Panel CrearZonaDrop()
         {
+            Color colorBordeNormal = Paleta.MoradoClaro;
+            Color colorFondoNormal = ColorTranslator.FromHtml("#FAF7FF");
+            Color colorBordeActivo = Paleta.MoradoOscuro;
+            Color colorFondoActivo = ColorTranslator.FromHtml("#EFE6FF");
+
+            Color bordeActual = colorBordeNormal;
+
             var zona = new Panel
             {
-                Size = new Size(390, 230),
-                BackColor = ColorTranslator.FromHtml("#FAF7FF"),
+                Size = new Size(390, 260),
+                BackColor = colorFondoNormal,
                 AllowDrop = true,
                 Cursor = Cursors.Hand
             };
 
-            // Borde punteado morado (dibujado con Paint)
             zona.Paint += (s, e) =>
             {
-                using var pen = new Pen(Paleta.MoradoClaro, 2.5f)
+                using var pen = new Pen(bordeActual, 2.5f)
                 {
-                    DashStyle = System.Drawing.Drawing2D.DashStyle.Dash
+                    DashStyle = System.Drawing.Drawing2D.DashStyle.Dash,
+                    DashPattern = new float[] { 6, 4 }
                 };
-                var rect = new Rectangle(1, 1, zona.Width - 3, zona.Height - 3);
-                // Esquinas redondeadas
+                var rect = new Rectangle(2, 2, zona.Width - 5, zona.Height - 5);
                 using var path = new System.Drawing.Drawing2D.GraphicsPath();
                 int r = 14;
                 path.AddArc(rect.X, rect.Y, r * 2, r * 2, 180, 90);
@@ -602,63 +728,159 @@ namespace MadurezTecnologica.Vistas
                 e.Graphics.DrawPath(pen, path);
             };
 
-            // Aplicar borde redondeado (para el fondo)
+            zona.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(zona, 14);
             Paleta.AplicarBordeRedondeadoSuave(zona, 14);
 
-            // Icono PDF circular
+            // Drag visual feedback — cambiar color del borde al hacer drag over
+            zona.DragEnter += (s, e) =>
+            {
+                bordeActual = colorBordeActivo;
+                zona.BackColor = colorFondoActivo;
+                zona.Invalidate();
+            };
+            zona.DragLeave += (s, e) =>
+            {
+                bordeActual = colorBordeNormal;
+                zona.BackColor = colorFondoNormal;
+                zona.Invalidate();
+            };
+            zona.DragDrop += (s, e) =>
+            {
+                bordeActual = colorBordeNormal;
+                zona.BackColor = colorFondoNormal;
+                zona.Invalidate();
+            };
+
+            // Hover sutil
+            zona.MouseEnter += (s, e) =>
+            {
+                if (bordeActual != colorBordeActivo)
+                {
+                    zona.BackColor = Color.FromArgb(247, 240, 255);
+                    zona.Invalidate();
+                }
+            };
+            zona.MouseLeave += (s, e) =>
+            {
+                if (bordeActual != colorBordeActivo)
+                {
+                    zona.BackColor = colorFondoNormal;
+                    zona.Invalidate();
+                }
+            };
+
+            // Icono PDF circular más prominente con halo translúcido
+            var iconoPdfHalo = new Panel
+            {
+                Size = new Size(90, 90),
+                Location = new Point((390 - 90) / 2, 30),
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+            iconoPdfHalo.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using var halo = new SolidBrush(Color.FromArgb(40, Paleta.MoradoClaro));
+                g.FillEllipse(halo, 0, 0, 90, 90);
+            };
+            zona.Controls.Add(iconoPdfHalo);
+
             var iconoPdf = new Panel
             {
-                Size = new Size(70, 70),
-                Location = new Point((390 - 70) / 2, 25),
-                BackColor = ColorTranslator.FromHtml("#F0EDF5")
+                Size = new Size(72, 72),
+                Location = new Point(9, 9),
+                BackColor = Paleta.MoradoClaro,
+                Cursor = Cursors.Hand
             };
             var pathIcono = new System.Drawing.Drawing2D.GraphicsPath();
-            pathIcono.AddEllipse(0, 0, 70, 70);
+            pathIcono.AddEllipse(0, 0, 72, 72);
             iconoPdf.Region = new Region(pathIcono);
 
-            var lblPdfIcono = new Label
+            // Usar Paint para dibujar el icono limpio en lugar del emoji 📄 que sobresale
+            iconoPdf.Paint += (s, e) =>
             {
-                Text = "📄",
-                Font = new Font("Segoe UI", 28),
-                ForeColor = Paleta.MoradoOscuro,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter,
-                BackColor = Color.Transparent
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+                // Dibujar una hoja simbolizando un PDF: rectángulo con esquina doblada
+                int cx = 36, cy = 36;
+                int w = 26, h = 32;
+                int x = cx - w / 2;
+                int y = cy - h / 2;
+
+                using var brushHoja = new SolidBrush(Color.White);
+                using var penHoja = new Pen(Color.White, 2);
+
+                var hoja = new System.Drawing.Drawing2D.GraphicsPath();
+                hoja.AddLine(x, y, x + w - 8, y);
+                hoja.AddLine(x + w - 8, y, x + w, y + 8);
+                hoja.AddLine(x + w, y + 8, x + w, y + h);
+                hoja.AddLine(x + w, y + h, x, y + h);
+                hoja.CloseFigure();
+                g.FillPath(brushHoja, hoja);
+
+                // Esquina doblada
+                using var brushDoble = new SolidBrush(Color.FromArgb(170, Paleta.MoradoClaro));
+                var doble = new System.Drawing.Drawing2D.GraphicsPath();
+                doble.AddLine(x + w - 8, y, x + w - 8, y + 8);
+                doble.AddLine(x + w - 8, y + 8, x + w, y + 8);
+                doble.CloseFigure();
+                g.FillPath(brushDoble, doble);
+
+                // Líneas de texto dentro de la hoja
+                using var penLineas = new Pen(Paleta.MoradoClaro, 1.5f);
+                int xL = x + 4;
+                int wL = w - 8;
+                g.DrawLine(penLineas, xL, y + 14, xL + wL, y + 14);
+                g.DrawLine(penLineas, xL, y + 19, xL + wL, y + 19);
+                g.DrawLine(penLineas, xL, y + 24, xL + wL - 6, y + 24);
             };
-            iconoPdf.Controls.Add(lblPdfIcono);
-            zona.Controls.Add(iconoPdf);
+
+            iconoPdfHalo.Controls.Add(iconoPdf);
 
             // Texto principal
             var lblTexto = new Label
             {
-                Text = "Arrastra el PDF aquí o haz clic para seleccionarlo",
-                Font = new Font("Segoe UI", 9),
-                ForeColor = Color.FromArgb(120, 115, 112),
-                Location = new Point(20, 105),
+                Text = "Arrastra el PDF aquí",
+                Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
+                ForeColor = Paleta.TextoOscuro,
+                Location = new Point(20, 130),
                 Size = new Size(350, 20),
                 TextAlign = ContentAlignment.MiddleCenter,
-                BackColor = Color.Transparent
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
             };
             zona.Controls.Add(lblTexto);
+
+            // Texto secundario
+            var lblTexto2 = new Label
+            {
+                Text = "o haz clic para seleccionarlo",
+                Font = new Font("Segoe UI", 8.5f),
+                ForeColor = Color.FromArgb(130, 125, 122),
+                Location = new Point(20, 152),
+                Size = new Size(350, 18),
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+            zona.Controls.Add(lblTexto2);
 
             // Botón "Seleccionar archivo"
             var btnSeleccionar = new Panel
             {
-                Size = new Size(160, 36),
-                Location = new Point((390 - 160) / 2, 135),
+                Size = new Size(180, 40),
+                Location = new Point((390 - 180) / 2, 185),
                 BackColor = Paleta.MoradoOscuro,
                 Cursor = Cursors.Hand
             };
-            var pathBtn = new System.Drawing.Drawing2D.GraphicsPath();
-            pathBtn.AddArc(0, 0, 36, 36, 90, 180);
-            pathBtn.AddArc(btnSeleccionar.Width - 36, 0, 36, 36, 270, 180);
-            pathBtn.CloseFigure();
-            btnSeleccionar.Region = new Region(pathBtn);
+            btnSeleccionar.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(btnSeleccionar, 20);
 
             var lblBtnSel = new Label
             {
-                Text = "Seleccionar archivo",
-                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                Text = "📂  Seleccionar archivo",
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
                 ForeColor = Paleta.TextoBlanco,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -667,11 +889,18 @@ namespace MadurezTecnologica.Vistas
             };
             btnSeleccionar.Controls.Add(lblBtnSel);
 
-            // Hover del botón
-            btnSeleccionar.MouseEnter += (s, e) => btnSeleccionar.BackColor = Paleta.MoradoOscuroHover;
-            btnSeleccionar.MouseLeave += (s, e) => btnSeleccionar.BackColor = Paleta.MoradoOscuro;
-            lblBtnSel.MouseEnter += (s, e) => btnSeleccionar.BackColor = Paleta.MoradoOscuroHover;
-            lblBtnSel.MouseLeave += (s, e) => btnSeleccionar.BackColor = Paleta.MoradoOscuro;
+            // Hover + press del botón
+            Color btnNormal = Paleta.MoradoOscuro;
+            Color btnHover = Paleta.MoradoOscuroHover;
+            Color btnPress = Color.FromArgb(60, 40, 90);
+            btnSeleccionar.MouseEnter += (s, e) => btnSeleccionar.BackColor = btnHover;
+            btnSeleccionar.MouseLeave += (s, e) => btnSeleccionar.BackColor = btnNormal;
+            lblBtnSel.MouseEnter += (s, e) => btnSeleccionar.BackColor = btnHover;
+            lblBtnSel.MouseLeave += (s, e) => btnSeleccionar.BackColor = btnNormal;
+            btnSeleccionar.MouseDown += (s, e) => btnSeleccionar.BackColor = btnPress;
+            btnSeleccionar.MouseUp += (s, e) => btnSeleccionar.BackColor = btnHover;
+            lblBtnSel.MouseDown += (s, e) => btnSeleccionar.BackColor = btnPress;
+            lblBtnSel.MouseUp += (s, e) => btnSeleccionar.BackColor = btnHover;
 
             // Click del botón
             EventHandler clickSel = (s, e) => OnSeleccionarArchivoClick();
@@ -682,10 +911,10 @@ namespace MadurezTecnologica.Vistas
             // Info de formato
             var lblFormato = new Label
             {
-                Text = "PDF · Máximo 10 MB",
-                Font = new Font("Segoe UI", 8),
-                ForeColor = Color.FromArgb(160, 155, 152),
-                Location = new Point(20, 185),
+                Text = "📄  PDF  ·  Máximo 10 MB",
+                Font = new Font("Segoe UI", 7.5f, FontStyle.Italic),
+                ForeColor = Color.FromArgb(150, 145, 142),
+                Location = new Point(20, 232),
                 Size = new Size(350, 16),
                 TextAlign = ContentAlignment.MiddleCenter,
                 BackColor = Color.Transparent
@@ -700,8 +929,9 @@ namespace MadurezTecnologica.Vistas
             // Click en cualquier parte de la zona (no solo el botón) → abrir diálogo
             EventHandler clickZona = (s, e) => OnSeleccionarArchivoClick();
             lblTexto.Click += clickZona;
+            lblTexto2.Click += clickZona;
+            iconoPdfHalo.Click += clickZona;
             iconoPdf.Click += clickZona;
-            lblPdfIcono.Click += clickZona;
 
             return zona;
         }
@@ -850,7 +1080,14 @@ namespace MadurezTecnologica.Vistas
         private void OnEmpresaActivaCambio()
         {
             CargarEmpresaActiva();
+
+            // Si había un archivo cargado, limpiarlo porque era de otra empresa
+            if (_archivoSeleccionado != null)
+            {
+                QuitarArchivo();
+            }
         }
+
         // ===================================================
         // CARGAR DATOS DE EMPRESA ACTIVA
         // ===================================================
@@ -858,13 +1095,20 @@ namespace MadurezTecnologica.Vistas
         {
             int? empresaId = Estado.EstadoApp.EmpresaActivaId;
 
+            var lblDetalles = panelBannerEmpresa.Controls.OfType<Label>()
+                .FirstOrDefault(l => l.Name == "lblDetallesEmpresa");
+
             if (empresaId == null)
             {
-                lblNombreEmpresa.Text = "Sin empresa seleccionada — ve a 'Empresas' para elegir una";
+                lblNombreEmpresa.Text = "Sin empresa seleccionada";
+                if (lblDetalles != null)
+                    lblDetalles.Text = "Ve a 'Empresas' en el menú lateral para seleccionar una.";
+
                 var avatar = panelBannerEmpresa.Controls.OfType<Panel>()
                     .FirstOrDefault(p => p.Controls.OfType<Label>().Any());
                 if (avatar != null)
                 {
+                    avatar.BackColor = Color.FromArgb(180, 175, 175);
                     var lblInicial = avatar.Controls.OfType<Label>().FirstOrDefault();
                     if (lblInicial != null) lblInicial.Text = "?";
                 }
@@ -876,21 +1120,28 @@ namespace MadurezTecnologica.Vistas
             if (empresa == null)
             {
                 lblNombreEmpresa.Text = "Empresa no encontrada";
+                if (lblDetalles != null) lblDetalles.Text = "";
                 return;
             }
 
-            lblNombreEmpresa.Text = $"{empresa.Nombre} · RIF: {empresa.Rif}";
+            lblNombreEmpresa.Text = empresa.Nombre;
+            if (lblDetalles != null)
+                lblDetalles.Text = $"RIF: {empresa.Rif}   ·   Sector: {empresa.Sector}   ·   Empleados: {empresa.CantidadEmpleados}";
 
             var avatarReal = panelBannerEmpresa.Controls.OfType<Panel>()
                 .FirstOrDefault(p => p.Controls.OfType<Label>().Any());
             if (avatarReal != null)
             {
+                avatarReal.BackColor = Paleta.MoradoOscuro;
                 var lblInicial = avatarReal.Controls.OfType<Label>().FirstOrDefault();
                 if (lblInicial != null)
                     lblInicial.Text = empresa.Nombre.Length > 0
                         ? empresa.Nombre[0].ToString().ToUpper()
                         : "?";
             }
+
+            // Actualizar hint del botón ya que cambió la empresa
+            ActualizarHintAnalizar();
         }
 
         // ===================================================
@@ -918,14 +1169,12 @@ namespace MadurezTecnologica.Vistas
                 var generador = new Logica.GeneradorPlantilla();
                 string rutaGenerada = generador.GenerarPlantilla(saveDialog.FileName);
 
-                // Confirmar al usuario
-                var respuesta = MessageBox.Show(
+                bool abrirCarpeta = Estilos.MensajeApp.Confirmar(
                     $"Plantilla generada correctamente en:\n\n{rutaGenerada}\n\n¿Deseas abrir la carpeta?",
                     "Plantilla generada",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Information);
+                    this.FindForm());
 
-                if (respuesta == DialogResult.Yes)
+                if (abrirCarpeta)
                 {
                     // Abrir el explorador en la carpeta y seleccionar el archivo
                     string? carpeta = Path.GetDirectoryName(rutaGenerada);
@@ -937,11 +1186,10 @@ namespace MadurezTecnologica.Vistas
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
+                Estilos.MensajeApp.Error(
                     $"Error al generar la plantilla:\n\n{ex.Message}",
                     "Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                    this.FindForm());
             }
         }
 
@@ -1004,11 +1252,42 @@ namespace MadurezTecnologica.Vistas
         // ===================================================
         private void CargarArchivo(string rutaArchivo)
         {
-            // Validar extensión
+            // === VALIDACIÓN 1: empresa activa obligatoria ===
+            if (Estado.EstadoApp.EmpresaActivaId == null)
+            {
+                Estilos.MensajeApp.Advertencia(
+                    "Debes seleccionar una empresa antes de cargar un PDF.\n\n" +
+                    "Ve a la sección 'Empresas' y haz clic en 'Seleccionar' en la empresa que quieras analizar.",
+                    "Sin empresa seleccionada",
+                    this.FindForm());
+                return;
+            }
+
+            // === VALIDACIÓN 2: la empresa NO debe tener análisis previo ===
+            int empresaId = Estado.EstadoApp.EmpresaActivaId.Value;
+            var repoConv = new Datos.RepositorioConversacion();
+            var convExistente = repoConv.ObtenerUltimaPorEmpresa(empresaId);
+
+            if (convExistente != null)
+            {
+                var repoEmpresa = new Datos.RepositorioEmpresa();
+                var emp = repoEmpresa.ObtenerPorId(empresaId);
+                Estilos.MensajeApp.Info(
+                    $"La empresa '{emp?.Nombre}' ya tiene un análisis previo del {convExistente.FechaInicio:dd/MM/yyyy}.\n\n" +
+                    "Solo se permite UN análisis por empresa para no confundir a la IA con datos contradictorios.\n\n" +
+                    "Si deseas re-analizar esta empresa, ve a 'Historial' en el menú lateral y elimina " +
+                    "los diagnósticos existentes. Cuando borres todos los diagnósticos, la conversación " +
+                    "se eliminará automáticamente y podrás cargar un nuevo informe.",
+                    "Análisis previo detectado",
+                    this.FindForm());
+                return;
+            }
+
+            // === Validar extensión ===
             if (!rutaArchivo.ToLower().EndsWith(".pdf"))
             {
-                MessageBox.Show("Solo se aceptan archivos PDF.",
-                    "Formato no válido", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                Estilos.MensajeApp.Advertencia("Solo se aceptan archivos PDF.",
+                    "Formato no válido", this.FindForm());
                 return;
             }
 
@@ -1017,10 +1296,10 @@ namespace MadurezTecnologica.Vistas
             long maxBytes = 10 * 1024 * 1024;
             if (info.Length > maxBytes)
             {
-                MessageBox.Show(
+                Estilos.MensajeApp.Advertencia(
                     $"El archivo excede el tamaño máximo de 10 MB.\n\nTamaño actual: {info.Length / 1024.0 / 1024.0:F2} MB",
                     "Archivo demasiado grande",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    this.FindForm());
                 return;
             }
 
@@ -1028,8 +1307,8 @@ namespace MadurezTecnologica.Vistas
             var gestor = new Logica.GestorInforme();
             if (!gestor.EsPdfValido(rutaArchivo))
             {
-                MessageBox.Show("El archivo no parece ser un PDF válido o está corrupto.",
-                    "PDF inválido", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                Estilos.MensajeApp.Advertencia("El archivo no parece ser un PDF válido o está corrupto.",
+                    "PDF inválido", this.FindForm());
                 return;
             }
 
@@ -1074,10 +1353,333 @@ namespace MadurezTecnologica.Vistas
             }
             else
             {
-                btnAnalizar.BackColor = Color.FromArgb(200, 200, 200);
+                btnAnalizar.BackColor = Color.FromArgb(195, 190, 200);
                 btnAnalizar.Cursor = Cursors.Default;
                 lblBtnAnalizar.Cursor = Cursors.Default;
             }
+
+            ActualizarHintAnalizar();
+        }
+
+        // ===================================================
+        // ANÁLISIS CON IA (botón "Analizar con IA")
+        // ===================================================
+        private async Task OnAnalizarClick()
+        {
+            // === Validaciones (red de seguridad) ===
+            if (_archivoSeleccionado == null)
+            {
+                Estilos.MensajeApp.Info("Primero carga un archivo PDF.",
+                    "Sin archivo", this.FindForm());
+                return;
+            }
+
+            if (Estado.EstadoApp.EmpresaActivaId == null)
+            {
+                Estilos.MensajeApp.Advertencia("Debes seleccionar una empresa antes de analizar.",
+                    "Sin empresa", this.FindForm());
+                return;
+            }
+
+            // Obtener la empresa de la BD
+            var repo = new Datos.RepositorioEmpresa();
+            var empresa = repo.ObtenerPorId(Estado.EstadoApp.EmpresaActivaId.Value);
+            if (empresa == null)
+            {
+                Estilos.MensajeApp.Error("La empresa seleccionada no se encontró en la base de datos.",
+                    "Empresa no encontrada", this.FindForm());
+                return;
+            }
+
+            bool modoOfflineForzado = Inteligencia.DetectorConexion.EstarForzadoOffline();
+
+            string mensajeConfirmacion;
+            string tituloConfirmacion;
+            if (modoOfflineForzado)
+            {
+                mensajeConfirmacion =
+                    $"⚠ MODO OFFLINE FORZADO ACTIVO\n\n" +
+                    $"Se va a analizar el PDF para la empresa '{empresa.Nombre}' usando el " +
+                    "MOTOR LOCAL (detección por palabras clave).\n\n" +
+                    "Este motor es menos preciso que la IA. Funciona detectando palabras clave " +
+                    "del informe y asignando un nivel CMMI aproximado.\n\n" +
+                    "Si quieres usar la IA, desactiva el modo offline desde el indicador del header.\n\n" +
+                    "¿Deseas continuar con el análisis offline?";
+                tituloConfirmacion = "Análisis con motor offline";
+            }
+            else
+            {
+                mensajeConfirmacion =
+                    $"Se va a analizar el PDF para la empresa '{empresa.Nombre}'.\n\n" +
+                    "Este proceso consultará a la IA y puede tomar entre 15 y 60 segundos.\n\n" +
+                    "¿Deseas continuar?";
+                tituloConfirmacion = "Confirmar análisis";
+            }
+
+            bool confirmado = Estilos.MensajeApp.Confirmar(
+                mensajeConfirmacion,
+                tituloConfirmacion,
+                this.FindForm());
+
+            if (!confirmado) return;
+
+            // === Bloquear UI y mostrar estado "Analizando" ===
+            lblBtnAnalizar.Text = "⏳  Analizando...";
+            HabilitarBotonAnalizar(false);
+            this.Cursor = Cursors.WaitCursor;
+
+            try
+            {
+                // Llamar al orquestador
+                var resultado = await _orquestador.AnalizarInformePdf(_archivoSeleccionado, empresa);
+
+                if (!resultado.Exitoso)
+                {
+                    // Mostrar el mensaje del orquestador (incluye casos de "no coincide con empresa")
+                    Estilos.MensajeApp.Advertencia(
+                        $"El análisis no pudo completarse:\n\n{resultado.Mensaje}",
+                        "Análisis no exitoso",
+                        this.FindForm());
+                    return;
+                }
+
+                // === Éxito: mostrar diagnóstico en modal ===
+                if (resultado.Diagnostico != null)
+                {
+                    bool fueOffline = resultado.ModoUsado != Inteligencia.ModoOperacion.Online;
+                    string motorUsado = fueOffline
+                        ? "🔌 Motor OFFLINE (detección por palabras clave)"
+                        : "🤖 IA (Claude)";
+
+                    string mensajeExito =
+                        $"¡Análisis completado con éxito!\n\n" +
+                        $"Motor utilizado: {motorUsado}\n" +
+                        $"Nivel CMMI detectado: {resultado.Diagnostico.NivelMadurez}\n" +
+                        $"Caracteres procesados: {resultado.CaracteresProcesados:N0}\n" +
+                        $"Validación: {resultado.MetodoValidacion}\n\n" +
+                        "El diagnóstico se ha guardado en la base de datos.\n" +
+                        "Haz clic en Aceptar para ver el reporte completo.";
+
+                    if (fueOffline)
+                        mensajeExito +=
+                            "\n\n💡 Cuando tengas conexión, podrás repetir el análisis con la IA " +
+                            "para obtener un resultado más preciso y detallado.";
+
+                    string titulo = fueOffline
+                        ? "Análisis offline completado"
+                        : "Análisis exitoso";
+
+                    Estilos.MensajeApp.Exito(mensajeExito, titulo, this.FindForm());
+
+                    // Mostrar modal con el diagnóstico completo (mismo diseño que VistaHistorial y VistaChat)
+                    MostrarModalDiagnostico(resultado.Diagnostico);
+                }
+
+                // Limpiar archivo cargado (ya se analizó esta empresa, no se puede analizar de nuevo)
+                QuitarArchivo();
+            }
+            catch (Exception ex)
+            {
+                Estilos.MensajeApp.Error(
+                    $"Error inesperado durante el análisis:\n\n{ex.Message}",
+                    "Error",
+                    this.FindForm());
+            }
+            finally
+            {
+                // Restaurar UI
+                lblBtnAnalizar.Text = "⚡  Analizar con IA";
+                HabilitarBotonAnalizar(_archivoSeleccionado != null);
+                this.Cursor = Cursors.Default;
+            }
+        }
+
+        // ===================================================
+        // MODAL DE DIAGNÓSTICO (mismo diseño que VistaHistorial y VistaChat)
+        // ===================================================
+        private void MostrarModalDiagnostico(Modelos.Diagnostico diag)
+        {
+            var form = new Form
+            {
+                Size = new Size(620, 580),
+                FormBorderStyle = FormBorderStyle.None,
+                StartPosition = FormStartPosition.CenterParent,
+                BackColor = Paleta.GrisClaro,
+                ShowInTaskbar = false
+            };
+            form.Load += (s, e) => Paleta.AplicarBordeRedondeadoSuave(form, 16);
+
+            form.Paint += (s, e) =>
+            {
+                using var pen = new Pen(Color.FromArgb(180, 175, 195), 1);
+                e.Graphics.DrawRectangle(pen, 0, 0, form.Width - 1, form.Height - 1);
+            };
+
+            // === HEADER MORADO ===
+            var header = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 80,
+                BackColor = Paleta.MoradoOscuro
+            };
+
+            string tipo = diag.EsFinal ? "📋 Diagnóstico Final" : "📝 Diagnóstico Intermedio";
+            var lblTipo = new Label
+            {
+                Text = tipo,
+                Font = new Font("Segoe UI Emoji", 13, FontStyle.Bold),
+                ForeColor = Paleta.TextoBlanco,
+                Location = new Point(20, 14),
+                AutoSize = true,
+                BackColor = Color.Transparent
+            };
+            header.Controls.Add(lblTipo);
+
+            string primerFrase = diag.ResumenEmpresa.Split('.').FirstOrDefault()?.Trim() ?? "";
+            if (primerFrase.Length > 50) primerFrase = primerFrase[..50] + "…";
+            var lblFechaHeader = new Label
+            {
+                Text = $"📅 {diag.FechaGeneracion:dd/MM/yyyy · HH:mm}   ·   {primerFrase}",
+                Font = new Font("Segoe UI Emoji", 8),
+                ForeColor = Color.FromArgb(195, 190, 220),
+                Location = new Point(22, 46),
+                Size = new Size(form.Width - 150, 18),
+                BackColor = Color.Transparent
+            };
+            header.Controls.Add(lblFechaHeader);
+
+            string nivelTexto = diag.NivelMadurez > 0 ? $"Nivel {diag.NivelMadurez}" : "Sin nivel";
+            var lblNivel = new Label
+            {
+                Text = nivelTexto,
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                ForeColor = Paleta.MoradoOscuro,
+                BackColor = Color.White,
+                Size = new Size(70, 26),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Location = new Point(form.Width - 145, 14)
+            };
+            var pathBadge = new System.Drawing.Drawing2D.GraphicsPath();
+            pathBadge.AddArc(0, 0, 26, 26, 90, 180);
+            pathBadge.AddArc(70 - 26, 0, 26, 26, 270, 180);
+            pathBadge.CloseFigure();
+            lblNivel.Region = new Region(pathBadge);
+            header.Controls.Add(lblNivel);
+
+            var btnCerrar = new Label
+            {
+                Text = "✕",
+                Font = new Font("Segoe UI", 14, FontStyle.Bold),
+                ForeColor = Color.FromArgb(200, 195, 220),
+                Size = new Size(35, 35),
+                Location = new Point(form.Width - 50, 10),
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+            btnCerrar.Click += (s, e) => form.Close();
+            btnCerrar.MouseEnter += (s, e) => btnCerrar.ForeColor = Color.White;
+            btnCerrar.MouseLeave += (s, e) => btnCerrar.ForeColor = Color.FromArgb(200, 195, 220);
+            header.Controls.Add(btnCerrar);
+
+            // Drag para mover el form
+            bool arrastrando = false;
+            Point puntoInicio = Point.Empty;
+            EventHandler<MouseEventArgs> down = (s, e) => { arrastrando = true; puntoInicio = e.Location; };
+            EventHandler<MouseEventArgs> move = (s, e) =>
+            {
+                if (arrastrando)
+                    form.Location = new Point(
+                        form.Location.X + e.X - puntoInicio.X,
+                        form.Location.Y + e.Y - puntoInicio.Y);
+            };
+            EventHandler<MouseEventArgs> up = (s, e) => arrastrando = false;
+
+            header.MouseDown += (s, e) => down(s, e);
+            header.MouseMove += (s, e) => move(s, e);
+            header.MouseUp += (s, e) => up(s, e);
+            lblTipo.MouseDown += (s, e) => down(s, e);
+            lblTipo.MouseMove += (s, e) => move(s, e);
+            lblTipo.MouseUp += (s, e) => up(s, e);
+
+            // === CONTENIDO SCROLLABLE ===
+            var contenido = new Panel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                Padding = new Padding(20, 12, 20, 15),
+                BackColor = Paleta.GrisClaro
+            };
+            form.Controls.Add(contenido);
+            form.Controls.Add(header);
+
+            var colorResumen = Paleta.MoradoOscuro;
+            var colorFortalezas = ColorTranslator.FromHtml("#4A8F6F");
+            var colorDebilidades = ColorTranslator.FromHtml("#D4841C");
+            var colorRiesgos = ColorTranslator.FromHtml("#C13F3F");
+            var colorRecomendaciones = ColorTranslator.FromHtml("#4A7FB5");
+
+            int y = 8;
+            y = AgregarSeccionDetalle(contenido, "📄  RESUMEN", diag.ResumenEmpresa, y, colorResumen);
+            y = AgregarSeccionDetalle(contenido, "✅  FORTALEZAS", diag.Fortalezas, y, colorFortalezas);
+            y = AgregarSeccionDetalle(contenido, "⚠️  DEBILIDADES", diag.Debilidades, y, colorDebilidades);
+            y = AgregarSeccionDetalle(contenido, "🔴  RIESGOS", diag.Riesgos, y, colorRiesgos);
+            y = AgregarSeccionDetalle(contenido, "💡  RECOMENDACIONES", diag.Recomendaciones, y, colorRecomendaciones);
+
+            form.ShowDialog(this.FindForm());
+        }
+
+        private int AgregarSeccionDetalle(Panel parent, string titulo, string contenido, int y, Color colorAccento)
+        {
+            if (string.IsNullOrWhiteSpace(contenido)) return y;
+
+            var fondoCard = Color.FromArgb(
+                252 + (int)((colorAccento.R - 252) * 0.03),
+                250 + (int)((colorAccento.G - 250) * 0.03),
+                255 + (int)((colorAccento.B - 255) * 0.03));
+
+            var lblContenido = new Label
+            {
+                Text = contenido,
+                Font = new Font("Segoe UI", 8.5f),
+                ForeColor = Color.FromArgb(60, 58, 55),
+                Location = new Point(18, 30),
+                MaximumSize = new Size(parent.ClientSize.Width - 90, 0),
+                AutoSize = true,
+                BackColor = Color.Transparent
+            };
+
+            int cardHeight = 30 + lblContenido.PreferredHeight + 15;
+
+            var card = new Panel
+            {
+                Location = new Point(5, y),
+                Size = new Size(parent.ClientSize.Width - 35, cardHeight),
+                BackColor = fondoCard
+            };
+            card.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(card, 10);
+
+            card.Paint += (s, e) =>
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using var brush = new SolidBrush(colorAccento);
+                e.Graphics.FillRectangle(brush, 0, 10, 4, card.Height - 20);
+            };
+
+            var lblTitulo = new Label
+            {
+                Text = titulo,
+                Font = new Font("Segoe UI Emoji", 7.5f, FontStyle.Bold),
+                ForeColor = colorAccento,
+                Location = new Point(18, 8),
+                AutoSize = true,
+                BackColor = Color.Transparent
+            };
+            card.Controls.Add(lblTitulo);
+            card.Controls.Add(lblContenido);
+
+            parent.Controls.Add(card);
+            return card.Bottom + 8;
         }
 
     }

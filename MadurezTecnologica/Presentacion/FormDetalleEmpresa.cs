@@ -18,12 +18,21 @@ namespace MadurezTecnologica.Presentacion
         private void ConfigurarForm()
         {
             Text = $"Detalles — {_empresa.Nombre}";
-            Size = new Size(560, 640);
+            Size = new Size(580, 660);
             StartPosition = FormStartPosition.CenterParent;
             BackColor = Color.White;
-            FormBorderStyle = FormBorderStyle.FixedDialog;
+            FormBorderStyle = FormBorderStyle.None;
             MaximizeBox = false;
             MinimizeBox = false;
+            ShowInTaskbar = false;
+
+            Load += (s, e) => Paleta.AplicarBordeRedondeadoSuave(this, 14);
+
+            Paint += (s, e) =>
+            {
+                using var pen = new Pen(Color.FromArgb(195, 188, 210), 1);
+                e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+            };
         }
 
         private void CrearContenido()
@@ -68,14 +77,15 @@ namespace MadurezTecnologica.Presentacion
                 Font = new Font("Segoe UI", 17, FontStyle.Bold),
                 ForeColor = Paleta.TextoBlanco,
                 Location = new Point(100, 28),
-                Size = new Size(420, 30),
-                BackColor = Color.Transparent
+                Size = new Size(380, 30),
+                BackColor = Color.Transparent,
+                AutoEllipsis = true
             };
             panelCabecera.Controls.Add(lblNombre);
 
             var lblRif = new Label
             {
-                Text = $"RIF: {_empresa.Rif}",
+                Text = $"RIF · {_empresa.Rif}",
                 Font = new Font("Segoe UI", 10),
                 ForeColor = Color.FromArgb(220, 255, 255, 255),
                 Location = new Point(102, 62),
@@ -83,6 +93,42 @@ namespace MadurezTecnologica.Presentacion
                 BackColor = Color.Transparent
             };
             panelCabecera.Controls.Add(lblRif);
+
+            // === BOTÓN CERRAR (X) ===
+            var btnCerrarX = new Label
+            {
+                Text = "✕",
+                Font = new Font("Segoe UI", 14, FontStyle.Bold),
+                ForeColor = Color.FromArgb(220, 200, 230),
+                Size = new Size(36, 36),
+                Location = new Point(panelCabecera.Width - 50, 14),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+            btnCerrarX.Click += (s, e) => Close();
+            btnCerrarX.MouseEnter += (s, e) => btnCerrarX.ForeColor = Color.White;
+            btnCerrarX.MouseLeave += (s, e) => btnCerrarX.ForeColor = Color.FromArgb(220, 200, 230);
+            panelCabecera.Controls.Add(btnCerrarX);
+
+            // === Drag por la cabecera ===
+            bool arrastrando = false;
+            Point puntoInicio = Point.Empty;
+            void OnDown(object? s, MouseEventArgs e) { arrastrando = true; puntoInicio = e.Location; }
+            void OnMove(object? s, MouseEventArgs e)
+            {
+                if (arrastrando)
+                    Location = new Point(Location.X + e.X - puntoInicio.X, Location.Y + e.Y - puntoInicio.Y);
+            }
+            void OnUp(object? s, MouseEventArgs e) { arrastrando = false; }
+
+            panelCabecera.MouseDown += OnDown;
+            panelCabecera.MouseMove += OnMove;
+            panelCabecera.MouseUp += OnUp;
+            lblNombre.MouseDown += OnDown;
+            lblNombre.MouseMove += OnMove;
+            lblNombre.MouseUp += OnUp;
 
 
             // BOTÓN CERRAR (abajo)
@@ -99,19 +145,21 @@ namespace MadurezTecnologica.Presentacion
             };
             Controls.Add(panelBotones);
 
-            // === Botón EDITAR (Panel + Label centrado) ===
+            // === Botón EDITAR ===
             var btnEditar = new Panel
             {
                 BackColor = Paleta.VerdeGrisaceoOscuro,
-                Size = new Size(130, 38),
-                Location = new Point(20, 14),
+                Size = new Size(140, 40),
+                Location = new Point(20, 13),
                 Cursor = Cursors.Hand
             };
+            btnEditar.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(btnEditar, 20);
+            Paleta.AplicarBordeRedondeadoSuave(btnEditar, 20);
 
             var lblBtnEditar = new Label
             {
                 Text = "✎  Editar",
-                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                Font = new Font("Segoe UI Emoji", 10, FontStyle.Bold),
                 ForeColor = Paleta.TextoBlanco,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -119,12 +167,6 @@ namespace MadurezTecnologica.Presentacion
                 Cursor = Cursors.Hand
             };
             btnEditar.Controls.Add(lblBtnEditar);
-
-            var pathEditar = new System.Drawing.Drawing2D.GraphicsPath();
-            pathEditar.AddArc(0, 0, 38, 38, 90, 180);
-            pathEditar.AddArc(btnEditar.Width - 38, 0, 38, 38, 270, 180);
-            pathEditar.CloseFigure();
-            btnEditar.Region = new Region(pathEditar);
 
             // Hover
             Color editarNormal = btnEditar.BackColor;
@@ -141,15 +183,17 @@ namespace MadurezTecnologica.Presentacion
 
             panelBotones.Controls.Add(btnEditar);
 
-            //  Botón CERRAR (Panel + Label centrado) 
+            // Botón CERRAR
             var btnCerrar = new Panel
             {
                 BackColor = Paleta.MoradoOscuro,
-                Size = new Size(130, 38),
-                Location = new Point(panelBotones.Width - 130 - 20, 14),
+                Size = new Size(140, 40),
+                Location = new Point(panelBotones.Width - 140 - 20, 13),
                 Anchor = AnchorStyles.Top | AnchorStyles.Right,
                 Cursor = Cursors.Hand
             };
+            btnCerrar.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(btnCerrar, 20);
+            Paleta.AplicarBordeRedondeadoSuave(btnCerrar, 20);
 
             var lblBtnCerrar = new Label
             {
@@ -162,12 +206,6 @@ namespace MadurezTecnologica.Presentacion
                 Cursor = Cursors.Hand
             };
             btnCerrar.Controls.Add(lblBtnCerrar);
-
-            var pathCerrar = new System.Drawing.Drawing2D.GraphicsPath();
-            pathCerrar.AddArc(0, 0, 38, 38, 90, 180);
-            pathCerrar.AddArc(btnCerrar.Width - 38, 0, 38, 38, 270, 180);
-            pathCerrar.CloseFigure();
-            btnCerrar.Region = new Region(pathCerrar);
 
             // Hover
             Color cerrarNormal = btnCerrar.BackColor;
@@ -251,13 +289,24 @@ namespace MadurezTecnologica.Presentacion
 
         private int CrearTituloSeccion(Panel padre, string titulo, int y)
         {
+            // Marker vertical morado a la izquierda del título
+            var marker = new Panel
+            {
+                Size = new Size(4, 22),
+                Location = new Point(5, y + 2),
+                BackColor = Paleta.MoradoOscuro
+            };
+            marker.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(marker, 2);
+            Paleta.AplicarBordeRedondeadoSuave(marker, 2);
+            padre.Controls.Add(marker);
+
             var lblTitulo = new Label
             {
                 Text = titulo,
                 Font = new Font("Segoe UI", 12, FontStyle.Bold),
                 ForeColor = Paleta.MoradoOscuro,
-                Location = new Point(5, y),
-                Size = new Size(480, 24),
+                Location = new Point(18, y),
+                Size = new Size(480, 26),
                 BackColor = Color.Transparent
             };
             padre.Controls.Add(lblTitulo);
@@ -265,13 +314,13 @@ namespace MadurezTecnologica.Presentacion
             // Línea separadora debajo del título
             var linea = new Panel
             {
-                BackColor = Color.FromArgb(40, 83, 55, 123),
-                Location = new Point(5, y + 28),
-                Size = new Size(480, 1)
+                BackColor = Color.FromArgb(35, 83, 55, 123),
+                Location = new Point(5, y + 32),
+                Size = new Size(495, 1)
             };
             padre.Controls.Add(linea);
 
-            return y + 40;
+            return y + 44;
         }
 
         private int CrearFilaDato(Panel padre, string etiqueta, string valor, int y)
@@ -279,10 +328,10 @@ namespace MadurezTecnologica.Presentacion
             var lblEtiqueta = new Label
             {
                 Text = etiqueta,
-                Font = new Font("Segoe UI", 10),
+                Font = new Font("Segoe UI", 9.5f),
                 ForeColor = Color.FromArgb(130, 125, 122),
-                Location = new Point(5, y),
-                Size = new Size(180, 20),
+                Location = new Point(18, y),
+                Size = new Size(200, 20),
                 BackColor = Color.Transparent
             };
             padre.Controls.Add(lblEtiqueta);
@@ -292,10 +341,11 @@ namespace MadurezTecnologica.Presentacion
                 Text = valor,
                 Font = new Font("Segoe UI", 10, FontStyle.Bold),
                 ForeColor = Paleta.TextoOscuro,
-                Location = new Point(190, y),
-                Size = new Size(295, 20),
+                Location = new Point(220, y),
+                Size = new Size(275, 20),
                 BackColor = Color.Transparent,
-                TextAlign = ContentAlignment.MiddleRight
+                TextAlign = ContentAlignment.MiddleRight,
+                AutoEllipsis = true
             };
             padre.Controls.Add(lblValor);
 
@@ -309,12 +359,11 @@ namespace MadurezTecnologica.Presentacion
 
             if (resultado == DialogResult.OK && modal.EmpresaGuardada != null)
             {
-                MessageBox.Show(
+                Estilos.MensajeApp.Exito(
                     "Cambios guardados correctamente.\n\n" +
                     "Cierra y vuelve a abrir este modal para ver los cambios actualizados.",
                     "Éxito",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                    this);
 
                 // Cerrar el modal de detalles también, así el usuario ve los datos frescos al reabrirlo
                 Close();

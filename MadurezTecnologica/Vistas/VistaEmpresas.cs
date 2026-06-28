@@ -6,12 +6,15 @@ namespace MadurezTecnologica.Vistas
     {
         // Paneles principales
         private Panel panelHeader = null!;
+        private Estilos.IndicadorModoConexion _indicadorConexion = null!;
         private Panel panelContenido = null!;
 
         // Header
         private Label lblTitulo = null!;
         private Label lblSubtitulo = null!;
         private Button btnNuevaEmpresa = null!;
+
+
 
         // Repositorio
         private MadurezTecnologica.Datos.RepositorioEmpresa _repoEmpresa = null!;
@@ -149,8 +152,9 @@ namespace MadurezTecnologica.Vistas
                 Font = new Font("Segoe UI", 9),
                 ForeColor = Paleta.TextoOscuro,
                 Location = new Point(70, 48),
-                Size = new Size(700, 20),
-                BackColor = Color.Transparent
+                Size = new Size(560, 20),
+                BackColor = Color.Transparent,
+                AutoEllipsis = true
             };
             panelHeader.Controls.Add(lblSubtitulo);
 
@@ -178,6 +182,13 @@ namespace MadurezTecnologica.Vistas
             btnNuevaEmpresa.Click += BtnNuevaEmpresa_Click;
             panelHeader.Controls.Add(btnNuevaEmpresa);
 
+            _indicadorConexion = new Estilos.IndicadorModoConexion
+            {
+                Size = new Size(175, 36)
+            };
+            panelHeader.Controls.Add(_indicadorConexion);
+            _indicadorConexion.BringToFront();
+
             ReposicionarBotonHeader();
         }
 
@@ -187,6 +198,10 @@ namespace MadurezTecnologica.Vistas
 
             btnNuevaEmpresa.Location = new Point(
                 panelHeader.Width - btnNuevaEmpresa.Width - 20, 25);
+
+            if (_indicadorConexion != null)
+                _indicadorConexion.Location = new Point(
+                    btnNuevaEmpresa.Left - _indicadorConexion.Width - 15, 25);
         }
 
 
@@ -248,11 +263,10 @@ namespace MadurezTecnologica.Vistas
                 // Recargar el grid para mostrar la nueva empresa
                 CargarEmpresas();
 
-                MessageBox.Show(
+                Estilos.MensajeApp.Exito(
                     $"Empresa '{modal.EmpresaGuardada.Nombre}' registrada exitosamente.",
-                    "Éxito",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                    "Empresa registrada",
+                    this.FindForm());
             }
         }
 
@@ -274,8 +288,8 @@ namespace MadurezTecnologica.Vistas
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error al cargar empresas: {ex.Message}",
-                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Estilos.MensajeApp.Error($"Error al cargar empresas: {ex.Message}",
+                    "Error", this.FindForm());
             }
         }
 
@@ -283,106 +297,154 @@ namespace MadurezTecnologica.Vistas
         {
             bool esActiva = Estado.EstadoApp.EmpresaActivaId == empresa.Id;
             Color colorFondo = esActiva ? Paleta.MoradoOscuro : Paleta.VerdeGrisaceo;
+            Color colorFondoHover = esActiva ? Paleta.MoradoOscuroHover : Paleta.VerdeGrisaceoOscuro;
 
             // === Tarjeta principal ===
             var tarjeta = new Panel
             {
-                Size = new Size(290, 240),
+                Size = new Size(300, 270),
                 BackColor = colorFondo,
                 Margin = new Padding(0, 0, 18, 18),
                 Cursor = Cursors.Hand,
-                Padding = new Padding(20),
+                Padding = new Padding(0),
                 Tag = empresa.Id
             };
+            tarjeta.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(tarjeta, 18);
+            Paleta.AplicarBordeRedondeadoSuave(tarjeta, 18);
 
-            // Esquinas redondeadas
-            Paleta.AplicarBordeRedondeadoSuave(tarjeta, 20);
+            // Sombra inferior sutil
+            tarjeta.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using var brushSombra = new SolidBrush(Color.FromArgb(35, Color.Black));
+                g.FillRectangle(brushSombra, 4, tarjeta.Height - 3, tarjeta.Width - 8, 3);
+            };
+
+            // === HEADER: avatar circular + nombre + RIF ===
+            int headerHeight = 78;
+            string inicial = empresa.Nombre.Length > 0 ? empresa.Nombre[0].ToString().ToUpper() : "?";
+
+            // Avatar circular
+            var avatar = new Panel
+            {
+                Size = new Size(48, 48),
+                Location = new Point(20, 18),
+                BackColor = Color.FromArgb(60, 255, 255, 255)
+            };
+            var pathAv = new System.Drawing.Drawing2D.GraphicsPath();
+            pathAv.AddEllipse(0, 0, 48, 48);
+            avatar.Region = new Region(pathAv);
+
+            var lblInicial = new Label
+            {
+                Text = inicial,
+                Font = new Font("Segoe UI", 18, FontStyle.Bold),
+                ForeColor = Color.White,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent
+            };
+            avatar.Controls.Add(lblInicial);
+            tarjeta.Controls.Add(avatar);
 
             // === Badge "ACTIVA" ===
             if (esActiva)
             {
                 var badge = new Label
                 {
-                    Text = "ACTIVA",
-                    Font = new Font("Segoe UI", 7, FontStyle.Bold),
-                    ForeColor = Paleta.TextoOscuro,
+                    Text = "● ACTIVA",
+                    Font = new Font("Segoe UI", 7f, FontStyle.Bold),
+                    ForeColor = Color.FromArgb(50, 100, 50),
                     BackColor = Paleta.VerdeBrillante,
-                    Size = new Size(55, 18),
-                    Location = new Point(tarjeta.Width - 75, 12),
+                    Size = new Size(62, 20),
+                    Location = new Point(tarjeta.Width - 82, 22),
                     TextAlign = ContentAlignment.MiddleCenter,
                     Padding = new Padding(0)
                 };
-                var pathBadge = new System.Drawing.Drawing2D.GraphicsPath();
-                pathBadge.AddArc(0, 0, 18, 18, 90, 180);
-                pathBadge.AddArc(badge.Width - 18, 0, 18, 18, 270, 180);
-                pathBadge.CloseFigure();
-                badge.Region = new Region(pathBadge);
+                badge.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(badge, 10);
+                Paleta.AplicarBordeRedondeadoSuave(badge, 10);
                 tarjeta.Controls.Add(badge);
             }
 
             // === Nombre de la empresa ===
+            int xText = 80;
             var lblNombre = new Label
             {
                 Text = empresa.Nombre,
-                Font = new Font("Segoe UI", 13, FontStyle.Bold),
+                Font = new Font("Segoe UI", 12.5f, FontStyle.Bold),
                 ForeColor = Paleta.TextoBlanco,
-                Location = new Point(20, 20),
-                Size = new Size(250, 22),
-                BackColor = Color.Transparent
+                Location = new Point(xText, 22),
+                Size = new Size(esActiva ? 140 : 200, 22),
+                BackColor = Color.Transparent,
+                AutoEllipsis = true
             };
             tarjeta.Controls.Add(lblNombre);
 
             // === RIF ===
             var lblRif = new Label
             {
-                Text = $"RIF: {empresa.Rif}",
-                Font = new Font("Segoe UI", 8),
-                ForeColor = Paleta.TextoBlanco,
-                Location = new Point(20, 44),
-                Size = new Size(250, 16),
+                Text = empresa.Rif,
+                Font = new Font("Segoe UI", 8.5f),
+                ForeColor = Color.FromArgb(220, 255, 255, 255),
+                Location = new Point(xText, 46),
+                Size = new Size(200, 16),
                 BackColor = Color.Transparent
             };
             tarjeta.Controls.Add(lblRif);
 
-            // === Separador ===
+            // === Separador horizontal ===
             var separador = new Panel
             {
-                BackColor = Color.FromArgb(80, 255, 255, 255),
-                Location = new Point(20, 70),
-                Size = new Size(250, 1)
+                BackColor = Color.FromArgb(50, 255, 255, 255),
+                Location = new Point(20, headerHeight),
+                Size = new Size(260, 1)
             };
             tarjeta.Controls.Add(separador);
 
-            // === Datos de la empresa ===
-            int yDato = 80;
-            AgregarLineaDato(tarjeta, "Sector:", empresa.Sector, yDato); yDato += 22;
-            AgregarLineaDato(tarjeta, "Empleados:", empresa.CantidadEmpleados.ToString(), yDato); yDato += 22;
-            AgregarLineaDato(tarjeta, "Teléfono:", string.IsNullOrEmpty(empresa.Telefono) ? "—" : empresa.Telefono, yDato); yDato += 22;
-            AgregarLineaDato(tarjeta, "Registro:", empresa.FechaRegistro.ToString("dd/MM/yyyy"), yDato);
+            // === Datos de la empresa (grid limpio) ===
+            int yDato = headerHeight + 12;
+            AgregarLineaDato(tarjeta, "📍  Sector", empresa.Sector, yDato); yDato += 21;
+            AgregarLineaDato(tarjeta, "👥  Empleados", empresa.CantidadEmpleados.ToString(), yDato); yDato += 21;
+            AgregarLineaDato(tarjeta, "📞  Teléfono", string.IsNullOrEmpty(empresa.Telefono) ? "—" : empresa.Telefono, yDato); yDato += 21;
+            AgregarLineaDato(tarjeta, "📅  Registro", empresa.FechaRegistro.ToString("dd/MM/yyyy"), yDato);
 
             // === Cálculo de posición simétrica de los botones ===
-            int anchoBoton = 115;
+            int anchoBoton = 120;
             int gapEntreBotones = 10;
             int anchoTotal = (anchoBoton * 2) + gapEntreBotones;
             int margenLateral = (tarjeta.ClientSize.Width - anchoTotal) / 2;
-            int yBotones = 175;
+            int yBotones = 220;
+            int altoBoton = 34;
 
-            // === BOTÓN PRIMARIO (Panel + Label) ===
-            string textoBotonPrimario = esActiva ? "Ir al chat" : "Seleccionar";
+            // === BOTÓN PRIMARIO — sólido contrastante con icono ===
+            string textoBotonPrimario = esActiva ? "💬   Ir al chat" : "✓   Seleccionar";
+
+            // Para empresa activa (morada): botón en VerdeBrillante (contrasta con morado)
+            // Para empresa inactiva (verde): botón en MoradoClaro/lila (contrasta con verde)
+            Color colorBtnFondo = esActiva ? Paleta.VerdeBrillante : Paleta.MoradoClaro;
+            Color colorBtnFondoHover = esActiva
+                ? Color.FromArgb(105, 220, 30)
+                : Paleta.MoradoOscuro;
+            Color colorBtnTexto = esActiva
+                ? Color.FromArgb(40, 70, 30)
+                : Color.White;
 
             var btnPrimario = new Panel
             {
-                BackColor = esActiva ? Paleta.VerdeGrisaceoOscuro : Paleta.MoradoClaro,
+                BackColor = colorBtnFondo,
                 Location = new Point(margenLateral, yBotones),
-                Size = new Size(anchoBoton, 30),
+                Size = new Size(anchoBoton, altoBoton),
                 Cursor = Cursors.Hand
             };
+            btnPrimario.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(btnPrimario, 17);
+            Paleta.AplicarBordeRedondeadoSuave(btnPrimario, 17);
 
             var lblBtnPrimario = new Label
             {
                 Text = textoBotonPrimario,
-                Font = new Font("Segoe UI", 9, FontStyle.Bold),
-                ForeColor = Paleta.TextoBlanco,
+                Font = new Font("Segoe UI Emoji", 9, FontStyle.Bold),
+                ForeColor = colorBtnTexto,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
                 BackColor = Color.Transparent,
@@ -390,35 +452,52 @@ namespace MadurezTecnologica.Vistas
             };
             btnPrimario.Controls.Add(lblBtnPrimario);
 
-            // Forma píldora
-            var pathBtnP = new System.Drawing.Drawing2D.GraphicsPath();
-            pathBtnP.AddArc(0, 0, 30, 30, 90, 180);
-            pathBtnP.AddArc(btnPrimario.Width - 30, 0, 30, 30, 270, 180);
-            pathBtnP.CloseFigure();
-            btnPrimario.Region = new Region(pathBtnP);
+            btnPrimario.MouseEnter += (s, e) => btnPrimario.BackColor = colorBtnFondoHover;
+            btnPrimario.MouseLeave += (s, e) => btnPrimario.BackColor = colorBtnFondo;
+            lblBtnPrimario.MouseEnter += (s, e) => btnPrimario.BackColor = colorBtnFondoHover;
+            lblBtnPrimario.MouseLeave += (s, e) => btnPrimario.BackColor = colorBtnFondo;
 
-            // Hover effect
-            Color colorNormalP = btnPrimario.BackColor;
-            Color colorHoverP = esActiva ? Paleta.VerdeGrisaceo : Paleta.MoradoOscuroHover;
-            btnPrimario.MouseEnter += (s, e) => btnPrimario.BackColor = colorHoverP;
-            btnPrimario.MouseLeave += (s, e) => btnPrimario.BackColor = colorNormalP;
-            lblBtnPrimario.MouseEnter += (s, e) => btnPrimario.BackColor = colorHoverP;
-            lblBtnPrimario.MouseLeave += (s, e) => btnPrimario.BackColor = colorNormalP;
-
-            // Click
             EventHandler primarioClick = (s, e) => OnBotonPrimarioClick(empresa);
             btnPrimario.Click += primarioClick;
             lblBtnPrimario.Click += primarioClick;
 
             tarjeta.Controls.Add(btnPrimario);
 
-            // === BOTÓN "VER DETALLES" (Panel + Label) ===
+            // === BOTÓN "VER DETALLES" — outlined (borde blanco translúcido) ===
             var btnDetalles = new Panel
             {
-                BackColor = Color.FromArgb(60, 255, 255, 255),
+                BackColor = Color.Transparent,
                 Location = new Point(margenLateral + anchoBoton + gapEntreBotones, yBotones),
-                Size = new Size(anchoBoton, 30),
+                Size = new Size(anchoBoton, altoBoton),
                 Cursor = Cursors.Hand
+            };
+
+            Color bordeBtnNormal = Color.FromArgb(120, 255, 255, 255);
+            Color bordeBtnHover = Color.White;
+            Color bordeBtnActual = bordeBtnNormal;
+            Color fondoBtnNormal = Color.Transparent;
+            Color fondoBtnHover = Color.FromArgb(40, 255, 255, 255);
+
+            btnDetalles.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                int r = 17;
+                using var path = new System.Drawing.Drawing2D.GraphicsPath();
+                path.AddArc(0, 0, r * 2, r * 2, 180, 90);
+                path.AddArc(btnDetalles.Width - r * 2 - 1, 0, r * 2, r * 2, 270, 90);
+                path.AddArc(btnDetalles.Width - r * 2 - 1, btnDetalles.Height - r * 2 - 1, r * 2, r * 2, 0, 90);
+                path.AddArc(0, btnDetalles.Height - r * 2 - 1, r * 2, r * 2, 90, 90);
+                path.CloseFigure();
+
+                if (btnDetalles.BackColor != Color.Transparent)
+                {
+                    using var brushFondo = new SolidBrush(fondoBtnHover);
+                    g.FillPath(brushFondo, path);
+                }
+
+                using var pen = new Pen(bordeBtnActual, 1.5f);
+                g.DrawPath(pen, path);
             };
 
             var lblBtnDetalles = new Label
@@ -433,27 +512,41 @@ namespace MadurezTecnologica.Vistas
             };
             btnDetalles.Controls.Add(lblBtnDetalles);
 
-            // Forma píldora
-            var pathBtnD = new System.Drawing.Drawing2D.GraphicsPath();
-            pathBtnD.AddArc(0, 0, 30, 30, 90, 180);
-            pathBtnD.AddArc(btnDetalles.Width - 30, 0, 30, 30, 270, 180);
-            pathBtnD.CloseFigure();
-            btnDetalles.Region = new Region(pathBtnD);
+            void HoverDetalles()
+            {
+                bordeBtnActual = bordeBtnHover;
+                btnDetalles.BackColor = fondoBtnHover;
+                btnDetalles.Invalidate();
+            }
+            void QuitarHoverDetalles()
+            {
+                bordeBtnActual = bordeBtnNormal;
+                btnDetalles.BackColor = fondoBtnNormal;
+                btnDetalles.Invalidate();
+            }
 
-            // Hover effect
-            Color colorNormalD = btnDetalles.BackColor;
-            Color colorHoverD = Color.FromArgb(100, 255, 255, 255);
-            btnDetalles.MouseEnter += (s, e) => btnDetalles.BackColor = colorHoverD;
-            btnDetalles.MouseLeave += (s, e) => btnDetalles.BackColor = colorNormalD;
-            lblBtnDetalles.MouseEnter += (s, e) => btnDetalles.BackColor = colorHoverD;
-            lblBtnDetalles.MouseLeave += (s, e) => btnDetalles.BackColor = colorNormalD;
+            btnDetalles.MouseEnter += (s, e) => HoverDetalles();
+            btnDetalles.MouseLeave += (s, e) => QuitarHoverDetalles();
+            lblBtnDetalles.MouseEnter += (s, e) => HoverDetalles();
+            lblBtnDetalles.MouseLeave += (s, e) => QuitarHoverDetalles();
 
-            // Click
             EventHandler detallesClick = (s, e) => OnVerDetallesClick(empresa);
             btnDetalles.Click += detallesClick;
             lblBtnDetalles.Click += detallesClick;
 
             tarjeta.Controls.Add(btnDetalles);
+
+            // === Hover de toda la tarjeta — sutil oscurecimiento ===
+            tarjeta.MouseEnter += (s, e) =>
+            {
+                if (!tarjeta.ClientRectangle.Contains(tarjeta.PointToClient(Cursor.Position))) return;
+                tarjeta.BackColor = colorFondoHover;
+            };
+            tarjeta.MouseLeave += (s, e) =>
+            {
+                if (!tarjeta.ClientRectangle.Contains(tarjeta.PointToClient(Cursor.Position)))
+                    tarjeta.BackColor = colorFondo;
+            };
 
             flowEmpresas.Controls.Add(tarjeta);
         }
@@ -464,10 +557,10 @@ namespace MadurezTecnologica.Vistas
             var lblEtiqueta = new Label
             {
                 Text = etiqueta,
-                Font = new Font("Segoe UI", 9),
-                ForeColor = Color.FromArgb(220, 255, 255, 255),
+                Font = new Font("Segoe UI Emoji", 8.5f),
+                ForeColor = Color.FromArgb(210, 255, 255, 255),
                 Location = new Point(20, y),
-                Size = new Size(100, 18),
+                Size = new Size(115, 18),
                 BackColor = Color.Transparent
             };
             padre.Controls.Add(lblEtiqueta);
@@ -477,33 +570,76 @@ namespace MadurezTecnologica.Vistas
                 Text = valor,
                 Font = new Font("Segoe UI", 9, FontStyle.Bold),
                 ForeColor = Paleta.TextoBlanco,
-                Location = new Point(110, y),
-                Size = new Size(160, 18),
+                Location = new Point(135, y),
+                Size = new Size(145, 18),
                 BackColor = Color.Transparent,
-                TextAlign = ContentAlignment.MiddleRight
+                TextAlign = ContentAlignment.MiddleRight,
+                AutoEllipsis = true
             };
             padre.Controls.Add(lblValor);
         }
 
         private void AgregarTarjetaNueva()
         {
+            Color fondoNormal = Color.FromArgb(15, 143, 101, 203);
+            Color fondoHover = Color.FromArgb(35, 143, 101, 203);
+            Color bordeNormal = Color.FromArgb(140, 143, 101, 203);
+            Color bordeHover = Paleta.MoradoOscuro;
+            Color bordeActual = bordeNormal;
+
             var tarjeta = new Panel
             {
-                Size = new Size(290, 240),
-                BackColor = Color.FromArgb(15, 143, 101, 203),  // Morado claro muy transparente
+                Size = new Size(300, 270),
+                BackColor = fondoNormal,
                 Margin = new Padding(0, 0, 18, 18),
                 Cursor = Cursors.Hand
             };
+            tarjeta.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(tarjeta, 18);
+            Paleta.AplicarBordeRedondeadoSuave(tarjeta, 18);
 
-            // Esquinas redondeadas
-            Paleta.AplicarBordeRedondeadoSuave(tarjeta, 20);
+            // Border dashed pintado en Paint (más visible que las dashed normales de WinForms)
+            tarjeta.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using var pen = new Pen(bordeActual, 2)
+                {
+                    DashStyle = System.Drawing.Drawing2D.DashStyle.Dash,
+                    DashPattern = new float[] { 6, 4 }
+                };
+                int r = 18;
+                using var path = new System.Drawing.Drawing2D.GraphicsPath();
+                path.AddArc(2, 2, r * 2, r * 2, 180, 90);
+                path.AddArc(tarjeta.Width - r * 2 - 3, 2, r * 2, r * 2, 270, 90);
+                path.AddArc(tarjeta.Width - r * 2 - 3, tarjeta.Height - r * 2 - 3, r * 2, r * 2, 0, 90);
+                path.AddArc(2, tarjeta.Height - r * 2 - 3, r * 2, r * 2, 90, 90);
+                path.CloseFigure();
+                g.DrawPath(pen, path);
+            };
 
-            // Círculo grande con "+"
+            // Círculo grande con "+" — con halo translúcido detrás
+            var circuloHalo = new Panel
+            {
+                Size = new Size(100, 100),
+                Location = new Point((300 - 100) / 2, 70),
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+            circuloHalo.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using var halo = new SolidBrush(Color.FromArgb(40, Paleta.MoradoClaro));
+                g.FillEllipse(halo, 0, 0, 100, 100);
+            };
+            tarjeta.Controls.Add(circuloHalo);
+
             var circulo = new Panel
             {
-                Size = new Size(70, 70),
-                BackColor = Paleta.MoradoClaro,
-                Location = new Point(110, 70)
+                Size = new Size(78, 78),
+                Location = new Point(11, 11),
+                BackColor = Paleta.MoradoOscuro,
+                Cursor = Cursors.Hand
             };
             var pathCirc = new System.Drawing.Drawing2D.GraphicsPath();
             pathCirc.AddEllipse(0, 0, circulo.Width, circulo.Height);
@@ -512,34 +648,69 @@ namespace MadurezTecnologica.Vistas
             var lblMas = new Label
             {
                 Text = "+",
-                Font = new Font("Segoe UI", 32, FontStyle.Bold),
+                Font = new Font("Segoe UI", 36, FontStyle.Bold),
                 ForeColor = Paleta.TextoBlanco,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
-                BackColor = Color.Transparent
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
             };
             circulo.Controls.Add(lblMas);
-            tarjeta.Controls.Add(circulo);
+            circuloHalo.Controls.Add(circulo);
 
-            // Texto
+            // Texto principal
             var lblTexto = new Label
             {
                 Text = "Registrar nueva empresa",
-                Font = new Font("Segoe UI", 11, FontStyle.Bold),
+                Font = new Font("Segoe UI", 11.5f, FontStyle.Bold),
                 ForeColor = Paleta.MoradoOscuro,
-                Location = new Point(40, 155),
-                Size = new Size(210, 25),
+                Location = new Point(30, 188),
+                Size = new Size(240, 22),
                 TextAlign = ContentAlignment.MiddleCenter,
                 BackColor = Color.Transparent
             };
             tarjeta.Controls.Add(lblTexto);
 
-            // Click en cualquier parte de la tarjeta → mismo evento que el botón del header
+            // Subtítulo
+            var lblHint = new Label
+            {
+                Text = "Click aquí para crear",
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Italic),
+                ForeColor = Color.FromArgb(140, 110, 175),
+                Location = new Point(30, 213),
+                Size = new Size(240, 18),
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent
+            };
+            tarjeta.Controls.Add(lblHint);
+
+            // Hover de toda la tarjeta
+            void AplicarHover()
+            {
+                tarjeta.BackColor = fondoHover;
+                bordeActual = bordeHover;
+                tarjeta.Invalidate();
+            }
+            void QuitarHover()
+            {
+                if (tarjeta.ClientRectangle.Contains(tarjeta.PointToClient(Cursor.Position))) return;
+                tarjeta.BackColor = fondoNormal;
+                bordeActual = bordeNormal;
+                tarjeta.Invalidate();
+            }
+            foreach (Control ctrl in new Control[] { tarjeta, circuloHalo, circulo, lblMas, lblTexto, lblHint })
+            {
+                ctrl.MouseEnter += (s, e) => AplicarHover();
+                ctrl.MouseLeave += (s, e) => QuitarHover();
+            }
+
             EventHandler clickHandler = (s, e) => BtnNuevaEmpresa_Click(s, e);
             tarjeta.Click += clickHandler;
+            circuloHalo.Click += clickHandler;
             circulo.Click += clickHandler;
             lblMas.Click += clickHandler;
             lblTexto.Click += clickHandler;
+            lblHint.Click += clickHandler;
 
             flowEmpresas.Controls.Add(tarjeta);
         }
@@ -558,13 +729,11 @@ namespace MadurezTecnologica.Vistas
                 // Si NO es la activa, seleccionarla como activa
                 Estado.EstadoApp.EstablecerEmpresaActiva(empresa.Id);
 
-                // Notificación amigable
-                MessageBox.Show(
+                Estilos.MensajeApp.Exito(
                     $"Empresa '{empresa.Nombre}' seleccionada como activa.\n\n" +
                     "Ahora puedes ir al chat para iniciar o continuar su evaluación.",
                     "Empresa activa",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                    this.FindForm());
 
                 // Recargar el grid para que la tarjeta se actualice (morada + badge ACTIVA)
                 CargarEmpresas();
@@ -605,26 +774,44 @@ namespace MadurezTecnologica.Vistas
                 Padding = new Padding(5, 10, 5, 5)
             };
 
-            // === Buscador (izquierda) ===
+            // === Buscador (izquierda) con focus state ===
             var panelBuscador = new Panel
             {
-                BackColor = ColorTranslator.FromHtml("#F0EDF5"),
+                BackColor = Paleta.LilaInput,
                 Location = new Point(5, 8),
-                Size = new Size(290, 32),
-                Padding = new Padding(12, 5, 10, 5)
+                Size = new Size(310, 34),
+                Padding = new Padding(36, 6, 14, 6)
             };
-            var pathB = new System.Drawing.Drawing2D.GraphicsPath();
-            pathB.AddArc(0, 0, 22, 22, 90, 180);
-            pathB.AddArc(panelBuscador.Width - 22, 0, 22, 22, 270, 180);
-            pathB.CloseFigure();
-            panelBuscador.Region = new Region(pathB);
+            panelBuscador.Resize += (s, e) => Paleta.AplicarBordeRedondeadoSuave(panelBuscador, 17);
 
+            // Border dinámico (cambia con focus)
+            Color bordeBuscadorNormal = Color.FromArgb(220, 215, 230);
+            Color bordeBuscadorFocus = Paleta.MoradoOscuro;
+            bool buscadorFocus = false;
+            panelBuscador.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                int r = 17;
+                using var path = new System.Drawing.Drawing2D.GraphicsPath();
+                path.AddArc(0, 0, r * 2, r * 2, 180, 90);
+                path.AddArc(panelBuscador.Width - r * 2 - 1, 0, r * 2, r * 2, 270, 90);
+                path.AddArc(panelBuscador.Width - r * 2 - 1, panelBuscador.Height - r * 2 - 1, r * 2, r * 2, 0, 90);
+                path.AddArc(0, panelBuscador.Height - r * 2 - 1, r * 2, r * 2, 90, 90);
+                path.CloseFigure();
+                using var pen = new Pen(buscadorFocus ? bordeBuscadorFocus : bordeBuscadorNormal,
+                                        buscadorFocus ? 2 : 1);
+                g.DrawPath(pen, path);
+            };
+
+            // Icono lupa con color dinámico
             var lblLupa = new Label
             {
                 Text = "🔍",
-                Font = new Font("Segoe UI", 9),
-                Dock = DockStyle.Left,
-                Width = 20,
+                Font = new Font("Segoe UI Emoji", 10),
+                ForeColor = Paleta.MoradoOscuro,
+                Location = new Point(12, 8),
+                Size = new Size(22, 22),
                 TextAlign = ContentAlignment.MiddleCenter,
                 BackColor = Color.Transparent
             };
@@ -634,10 +821,22 @@ namespace MadurezTecnologica.Vistas
             {
                 Font = new Font("Segoe UI", 10),
                 ForeColor = Paleta.TextoOscuro,
-                BackColor = ColorTranslator.FromHtml("#F0EDF5"),
+                BackColor = Paleta.LilaInput,
                 BorderStyle = BorderStyle.None,
                 Dock = DockStyle.Fill,
-                PlaceholderText = "Buscar empresa..."
+                PlaceholderText = "Buscar empresa por nombre o RIF..."
+            };
+            txtBuscar.GotFocus += (s, e) =>
+            {
+                buscadorFocus = true;
+                lblLupa.ForeColor = Paleta.MoradoClaro;
+                panelBuscador.Invalidate();
+            };
+            txtBuscar.LostFocus += (s, e) =>
+            {
+                buscadorFocus = false;
+                lblLupa.ForeColor = Paleta.MoradoOscuro;
+                panelBuscador.Invalidate();
             };
             txtBuscar.TextChanged += (s, e) =>
             {
@@ -650,7 +849,7 @@ namespace MadurezTecnologica.Vistas
             barra.Controls.Add(panelBuscador);
 
             // === Tabs (derecha) ===
-            int xTab = 310;
+            int xTab = 335;
 
             (tabTodas, lblTabTodas) = CrearTab("Todas", 0, TipoFiltro.Todas, xTab);
             xTab += tabTodas.Width + 8;

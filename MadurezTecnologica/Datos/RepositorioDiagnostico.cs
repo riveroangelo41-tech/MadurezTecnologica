@@ -100,6 +100,42 @@ namespace MadurezTecnologica.Datos
             return lista;
         }
 
+        public void DesmarcarFinalesPorConversacion(int conversacionId)
+        {
+            using var conexion = new SqliteConnection(BaseDatos.CadenaConexion);
+            conexion.Open();
+
+            var cmd = conexion.CreateCommand();
+            cmd.CommandText = @"
+                UPDATE Diagnosticos
+                SET EsFinal = 0
+                WHERE ConversacionId = $convId AND EsFinal = 1";
+            cmd.Parameters.AddWithValue("$convId", conversacionId);
+            cmd.ExecuteNonQuery();
+        }
+
+        public void EliminarPorId(int id)
+        {
+            using var conexion = new SqliteConnection(BaseDatos.CadenaConexion);
+            conexion.Open();
+
+            var cmd = conexion.CreateCommand();
+            cmd.CommandText = "DELETE FROM Diagnosticos WHERE Id = $id";
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.ExecuteNonQuery();
+        }
+
+        public void EliminarPorConversacion(int conversacionId)
+        {
+            using var conexion = new SqliteConnection(BaseDatos.CadenaConexion);
+            conexion.Open();
+
+            var cmd = conexion.CreateCommand();
+            cmd.CommandText = "DELETE FROM Diagnosticos WHERE ConversacionId = $convId";
+            cmd.Parameters.AddWithValue("$convId", conversacionId);
+            cmd.ExecuteNonQuery();
+        }
+
         private Diagnostico LeerDiagnostico(SqliteDataReader reader)
         {
             return new Diagnostico

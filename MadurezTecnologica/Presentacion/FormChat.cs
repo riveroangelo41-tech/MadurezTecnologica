@@ -166,8 +166,8 @@ namespace MadurezTecnologica.Presentacion
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error al cargar el historial: {ex.Message}",
-                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Estilos.MensajeApp.Error($"Error al cargar el historial: {ex.Message}",
+                    "Error", this);
             }
         }
 
@@ -233,8 +233,8 @@ namespace MadurezTecnologica.Presentacion
 
             if (string.IsNullOrWhiteSpace(mensaje))
             {
-                MessageBox.Show("Escribe un mensaje antes de enviar.",
-                    "Mensaje vacío", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Estilos.MensajeApp.Info("Escribe un mensaje antes de enviar.",
+                    "Mensaje vacío", this);
                 return;
             }
 
@@ -255,8 +255,8 @@ namespace MadurezTecnologica.Presentacion
             catch (Exception ex)
             {
                 // Mostrar error si falla el envío o la respuesta
-                MessageBox.Show($"Error al enviar el mensaje:\n{ex.Message}",
-                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Estilos.MensajeApp.Error($"Error al enviar el mensaje:\n{ex.Message}",
+                    "Error", this);
             }
             finally
             {
@@ -269,15 +269,13 @@ namespace MadurezTecnologica.Presentacion
 
         private async void BtnRefinar_Click(object? sender, EventArgs e) // Permite al usuario refinar el diagnóstico final consultando a Claude con todo el historial actual. Muestra un mensaje de confirmación antes de proceder.
         {
-            // Confirmación antes de refinar
-            var confirmacion = MessageBox.Show(
+            bool confirmado = Estilos.MensajeApp.Confirmar(
                 "¿Deseas regenerar el diagnóstico final considerando toda la conversación?\n\n" +
                 "Esto consultará a Claude usando todo el historial actual.",
                 "Confirmar refinamiento",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
+                this);
 
-            if (confirmacion != DialogResult.Yes) return;
+            if (!confirmado) return;
 
             BloquearControles(true);
             lblEstado.Text = "Refinando diagnóstico final con todo el contexto...";
@@ -295,14 +293,13 @@ namespace MadurezTecnologica.Presentacion
             catch (InvalidOperationException ex)
             {
                 // Este error se lanza si no hay suficiente información para generar un diagnóstico final. Se muestra como información al usuario.
-                MessageBox.Show(ex.Message, "Información",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Estilos.MensajeApp.Info(ex.Message, "Información", this);
             }
             catch (Exception ex)
             {
                 // Mostrar error si falla el refinamiento
-                MessageBox.Show($"Error al refinar:\n{ex.Message}",
-                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Estilos.MensajeApp.Error($"Error al refinar:\n{ex.Message}",
+                    "Error", this);
             }
             finally
             {

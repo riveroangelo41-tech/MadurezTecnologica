@@ -6,12 +6,24 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Metadatos del ejecutable -->
+    <AssemblyTitle>Sistema de Evaluación de Madurez Tecnológica</AssemblyTitle>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Company>Angelo Rivero</Company>
+    <Product>MadurezTecnologica</Product>
+    <Copyright>© 2026 Angelo Rivero</Copyright>
+
+    <!-- Compresión para reducir tamaño del exe final -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="appconfi.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
+    <!-- Copia appconfi.json al lado del .exe en cada publish -->
+    <None Update="appconfi.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

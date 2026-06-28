@@ -27,6 +27,7 @@ namespace MadurezTecnologica.Logica
         private readonly GestorInforme _gestorInforme;
         private readonly GestorDiagnostico _gestorDiagnostico;
         private readonly DetectorConexion _detectorConexion;
+        private readonly MotorOffline _motorOffline;
         private readonly RepositorioEmpresa _repoEmpresa;
         private readonly RepositorioConversacion _repoConversacion;
         private readonly RepositorioMensaje _repoMensaje;
@@ -37,6 +38,7 @@ namespace MadurezTecnologica.Logica
             _gestorInforme = new GestorInforme();
             _gestorDiagnostico = new GestorDiagnostico();
             _detectorConexion = new DetectorConexion();
+            _motorOffline = new MotorOffline();
             _repoEmpresa = new RepositorioEmpresa();
             _repoConversacion = new RepositorioConversacion();
             _repoMensaje = new RepositorioMensaje();
@@ -64,17 +66,7 @@ namespace MadurezTecnologica.Logica
                 var modo = await _detectorConexion.DetectarModo();
                 resultado.ModoUsado = modo;
 
-                // PASO 3: Si no es online, devolver mensaje informativo
-                if (modo != ModoOperacion.Online)
-                {
-                    resultado.Exitoso = false;
-                    resultado.Mensaje = modo == ModoOperacion.OfflineSinRed
-                        ? "No hay conexión a internet. El modo offline estará disponible próximamente."
-                        : "Modo offline activado manualmente. El motor offline estará disponible próximamente.";
-                    return resultado;
-                }
-
-                // PASO 4: Extraer texto del PDF
+                // PASO 3: Extraer texto del PDF (común a ambos modos)
                 string textoInforme = _gestorInforme.ExtraerTexto(rutaPdf);
                 resultado.CaracteresProcesados = textoInforme.Length;
 
@@ -85,7 +77,15 @@ namespace MadurezTecnologica.Logica
                     return resultado;
                 }
 
-                // PASO 5: Validar coherencia
+                // PASO 4: Decidir flujo según modo
+                if (modo != ModoOperacion.Online)
+                {
+                    return EjecutarAnalisisOffline(textoInforme, rutaPdf, empresa, resultado, modo);
+                }
+
+                // === FLUJO ONLINE ===
+
+                // PASO 5: Validar coherencia con IA
                 var validacion = await _gestorDiagnostico.ValidarCoherenciaPDF(textoInforme, empresa);
                 resultado.MetodoValidacion = validacion.MetodoUsado;
 
@@ -114,6 +114,163 @@ namespace MadurezTecnologica.Logica
                 resultado.Mensaje = $"Error durante el análisis: {ex.Message}";
                 return resultado;
             }
+        }
+
+        // ===================================================
+        // FLUJO OFFLINE
+        // ===================================================
+        private ResultadoAnalisis EjecutarAnalisisOffline(
+            string textoInforme, string rutaPdf, Empresa empresa,
+            ResultadoAnalisis resultado, ModoOperacion modo)
+        {
+            // Validación local de coherencia (sin IA): buscar referencias a la empresa
+            var validacionOffline = ValidarCoherenciaOffline(textoInforme, empresa);
+            resultado.MetodoValidacion = validacionOffline.MetodoUsado;
+
+            if (!validacionOffline.EsCoherente)
+            {
+                resultado.Exitoso = false;
+                resultado.Mensaje = $"El informe no parece corresponder a la empresa registrada ({empresa.Nombre}). " +
+                                    $"{validacionOffline.Mensaje}";
+                return resultado;
+            }
+
+            // Ejecutar motor offline
+            var diagnostico = _motorOffline.AnalizarTexto(textoInforme, empresa);
+
+            // Construir un "texto crudo" sintético para guardar como mensaje
+            string textoCrudo = ConstruirTextoCrudoOffline(diagnostico, modo);
+
+            // Persistir igual que el flujo online
+            PersistirAnalisis(empresa, rutaPdf, textoCrudo, diagnostico, resultado);
+
+            resultado.Exitoso = true;
+            resultado.Mensaje = modo == ModoOperacion.OfflineSinRed
+                ? $"Análisis completado en modo OFFLINE (sin conexión a internet). " +
+                  $"Validación: {validacionOffline.Mensaje}"
+                : $"Análisis completado en modo OFFLINE forzado. " +
+                  $"Validación: {validacionOffline.Mensaje}";
+            resultado.TextoAnalisis = textoCrudo;
+            resultado.Diagnostico = diagnostico;
+            return resultado;
+        }
+
+        // Resultado de validación offline (la online usa una clase del GestorDiagnostico)
+        private record ValidacionOffline(bool EsCoherente, string Mensaje, string MetodoUsado);
+
+        private ValidacionOffline ValidarCoherenciaOffline(string texto, Empresa empresa)
+        {
+            string textoLower = texto.ToLowerInvariant();
+            string nombreLower = empresa.Nombre?.ToLowerInvariant() ?? "";
+            string rifLower = empresa.Rif?.ToLowerInvariant() ?? "";
+
+            string nombreCore = nombreLower
+                .Replace(",", " ")
+                .Replace(".", " ")
+                .Replace(" c a ", " ")
+                .Replace(" s a ", " ")
+                .Replace(" c.a.", " ")
+                .Replace(" s.a.", " ")
+                .Trim();
+            string primeraPalabra = nombreCore.Split(' ')[0];
+
+            bool rifEncontrado = !string.IsNullOrWhiteSpace(rifLower) && textoLower.Contains(rifLower);
+            bool nombreEncontrado = !string.IsNullOrWhiteSpace(primeraPalabra) &&
+                                    primeraPalabra.Length >= 3 &&
+                                    textoLower.Contains(primeraPalabra);
+            bool sectorEncontrado = ValidarSector(textoLower, empresa.Sector);
+
+            // RIF + nombre + sector = match perfecto
+            if (rifEncontrado && nombreEncontrado && sectorEncontrado)
+                return new ValidacionOffline(true,
+                    "Coincidencia RIF + nombre + palabras del sector",
+                    "offline (RIF + nombre + sector)");
+
+            if (rifEncontrado && nombreEncontrado)
+                return new ValidacionOffline(true,
+                    "Se encontró el RIF y el nombre de la empresa en el texto",
+                    "offline (RIF + nombre)");
+
+            if (rifEncontrado)
+                return new ValidacionOffline(true,
+                    "Se encontró el RIF de la empresa en el texto",
+                    "offline (RIF)");
+
+            if (nombreEncontrado && sectorEncontrado)
+                return new ValidacionOffline(true,
+                    "Se encontró el nombre y palabras del sector en el texto",
+                    "offline (nombre + sector)");
+
+            if (nombreEncontrado)
+                return new ValidacionOffline(true,
+                    "Se encontró el nombre de la empresa en el texto",
+                    "offline (nombre)");
+
+            return new ValidacionOffline(false,
+                "No se encontró ni el RIF ni el nombre de la empresa en el texto del PDF.",
+                "offline");
+        }
+
+        // Verifica si al menos UNA palabra significativa del sector aparece en el texto
+        // del informe (filtra stopwords y palabras muy cortas)
+        private bool ValidarSector(string textoLower, string? sector)
+        {
+            if (string.IsNullOrWhiteSpace(sector)) return false;
+
+            var stopwords = new HashSet<string>
+            {
+                "de", "del", "la", "el", "los", "las", "y", "o", "para", "con", "en",
+                "un", "una", "unos", "unas", "por", "que", "se", "su", "sus", "al", "a",
+                "como"
+            };
+
+            var palabras = sector.ToLowerInvariant()
+                .Replace(",", " ").Replace(".", " ").Replace(";", " ")
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var palabra in palabras)
+            {
+                if (palabra.Length < 4) continue;
+                if (stopwords.Contains(palabra)) continue;
+
+                if (textoLower.Contains(palabra))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private string ConstruirTextoCrudoOffline(Diagnostico diag, ModoOperacion modo)
+        {
+            string etiqueta = modo == ModoOperacion.OfflineSinRed
+                ? "[ANÁLISIS OFFLINE - Sin conexión a internet]"
+                : "[ANÁLISIS OFFLINE - Modo offline forzado]";
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(etiqueta);
+            sb.AppendLine();
+            sb.AppendLine($"Nivel CMMI detectado: {diag.NivelMadurez}");
+            sb.AppendLine();
+            sb.AppendLine("RESUMEN:");
+            sb.AppendLine(diag.ResumenEmpresa);
+            sb.AppendLine();
+            sb.AppendLine("FORTALEZAS:");
+            sb.AppendLine(diag.Fortalezas);
+            sb.AppendLine();
+            sb.AppendLine("DEBILIDADES:");
+            sb.AppendLine(diag.Debilidades);
+            sb.AppendLine();
+            sb.AppendLine("RIESGOS:");
+            sb.AppendLine(diag.Riesgos);
+            sb.AppendLine();
+            sb.AppendLine("RECOMENDACIONES:");
+            sb.AppendLine(diag.Recomendaciones);
+            sb.AppendLine();
+            sb.AppendLine("---");
+            sb.AppendLine("Este análisis fue generado por el motor offline basado en detección de patrones. " +
+                          "Para una evaluación más profunda y matizada se recomienda repetir el análisis cuando " +
+                          "haya conexión a internet disponible.");
+            return sb.ToString();
         }
 
         // Método privado que persiste todo el análisis en cascada en la BD

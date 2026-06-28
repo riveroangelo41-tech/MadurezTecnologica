@@ -15,9 +15,11 @@ namespace MadurezTecnologica.Logica
         private readonly RepositorioEmpresa _repoEmpresa;
         private readonly RepositorioDiagnostico _repoDiagnostico;
 
+        private readonly MotorChatOffline _motorChatOffline;
+        private readonly MotorOffline _motorOffline;
+
         public GestorConversacion()
         {
-            // Inicializa los objetos necesarios para la gestión de conversaciones
             _clienteIA = new ClienteIA();
             _constructorPrompt = new ConstructorPrompt();
             _gestorDiagnostico = new GestorDiagnostico();
@@ -25,6 +27,8 @@ namespace MadurezTecnologica.Logica
             _repoConversacion = new RepositorioConversacion();
             _repoEmpresa = new RepositorioEmpresa();
             _repoDiagnostico = new RepositorioDiagnostico();
+            _motorChatOffline = new MotorChatOffline();
+            _motorOffline = new MotorOffline();
         }
 
         // Carga todos los mensajes de una conversación, ordenados cronológicamente
@@ -143,6 +147,7 @@ namespace MadurezTecnologica.Logica
             mensajesIA = NormalizarAlternancia(mensajesIA);
 
             string promptSistema = _constructorPrompt.PromptSistema();
+
             string respuestaIA = await _clienteIA.EnviarConversacion(mensajesIA, promptSistema);
 
             // 6. Si llegamos aquí, la llamada fue exitosa. Ahora persistimos ambos mensajes.
@@ -171,37 +176,46 @@ namespace MadurezTecnologica.Logica
             // 9. Devolver la respuesta para mostrarla al usuario
             return respuestaIA;
         }
-        public async Task<Diagnostico> RegenerarDiagnosticoFinal(int conversacionId) // Este método se llama cuando el usuario hace clic en "Refinar diagnóstico" para generar un nuevo diagnóstico final considerando toda la conversación previa
+        public async Task<Diagnostico> RegenerarDiagnosticoFinal(int conversacionId)
         {
-            //Validaciones previas 
-
+            //Validaciones previas
             if (!_repoConversacion.Existe(conversacionId))
             {
-                throw new ArgumentException( 
-                    $"La conversación con ID {conversacionId} no existe."); // Validar que la conversación existe antes de intentar cargar su historial o generar un diagnóstico final. Si no existe, se lanza una excepción con un mensaje claro.
+                throw new ArgumentException(
+                    $"La conversación con ID {conversacionId} no existe.");
             }
 
-            var historial = CargarHistorial(conversacionId); // Cargar el historial de mensajes de la conversación para construir el contexto que se enviará a Claude. Este historial incluirá tanto el análisis inicial como todas las interacciones posteriores del usuario.
+            var historial = CargarHistorial(conversacionId);
 
-            if (historial.Count < 2) // Validar que hay suficientes mensajes en el historial para justificar un refinamiento del diagnóstico. Si solo hay el análisis inicial (1 mensaje), no tiene sentido generar un nuevo diagnóstico final, ya que no se ha aportado información adicional ni se ha tenido una conversación significativa.
+            if (historial.Count < 2)
             {
                 throw new InvalidOperationException(
                     "Se requiere al menos un intercambio conversacional previo para refinar el diagnóstico. " +
                     "Esta conversación solo tiene el análisis inicial.");
             }
 
+            // === RAMA OFFLINE ===
+            if (DetectorConexion.EstarForzadoOffline())
+            {
+                return RegenerarDiagnosticoFinalOffline(conversacionId, historial);
+            }
+
             // construir el contexto para Claude 
 
             var mensajesIA = ConstruirMensajesParaIA(historial); // Convertir el historial de mensajes al formato que espera la API de Claude que es lista de objetos con Role y Content.
 
-            // Asegurar que la conversación empiece con "user"
-            if (mensajesIA.Count > 0 && mensajesIA[0].Role == "assistant")  // Si el primer mensaje es del assistant, insertamos un mensaje "user" al inicio para cumplir con el formato que exige la API de Claude, que requiere que la conversación comience con un mensaje del usuario.
+            // Asegurar que la conversación empiece con "user" con instrucciones claras
+            if (mensajesIA.Count > 0 && mensajesIA[0].Role == "assistant")
             {
-                // Insertar un mensaje "user" al inicio del contexto para cumplir con el formato requerido por la API de Claude, que exige que la conversación comience con un mensaje del usuario. Este mensaje explica que se compartió el informe inicial y se recibió un análisis de madurez tecnológica, estableciendo así el contexto para toda la conversación posterior.
                 mensajesIA.Insert(0, new MensajeIA
                 {
                     Role = "user",
-                    Content = "Te compartí el informe de mi empresa y me entregaste un análisis de madurez tecnológica."
+                    Content =
+                        "A continuación te paso el informe técnico de mi empresa. " +
+                        "Tu primera respuesta será el análisis de madurez tecnológica que ya realizaste sobre él. " +
+                        "Después tendremos una conversación de seguimiento basada en ese análisis. " +
+                        "IMPORTANTE: tienes acceso completo al análisis previo que ya hiciste — está justo en tu siguiente mensaje. " +
+                        "NO me pidas que vuelva a compartir el informe ni digas que no tienes memoria; el análisis está disponible en el contexto."
                 });
             }
 
@@ -230,6 +244,10 @@ namespace MadurezTecnologica.Logica
             var diagnosticoFinal = _gestorDiagnostico.ParsearRespuesta(respuestaCruda);
             diagnosticoFinal.ConversacionId = conversacionId;
             diagnosticoFinal.EsFinal = true;
+
+            // Desmarcar los Final anteriores: solo el más reciente debe ser FINAL,
+            // los anteriores quedan como Intermedios (refinamientos previos en el historial).
+            _repoDiagnostico.DesmarcarFinalesPorConversacion(conversacionId);
 
             int idGuardado = _repoDiagnostico.Guardar(diagnosticoFinal);
             diagnosticoFinal.Id = idGuardado;
@@ -307,9 +325,9 @@ namespace MadurezTecnologica.Logica
         }
 
         public async IAsyncEnumerable<string> EnviarMensajeUsuarioStream(
-    int conversacionId,
-    string textoUsuario,
-    [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+     int conversacionId,
+     string textoUsuario,
+     [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
         {
             // Validaciones (igual que en EnviarMensajeUsuario)
             if (string.IsNullOrWhiteSpace(textoUsuario))
@@ -321,6 +339,14 @@ namespace MadurezTecnologica.Logica
             if (!_repoConversacion.Existe(conversacionId))
                 throw new ArgumentException($"La conversación con ID {conversacionId} no existe.");
 
+            // === RAMA OFFLINE — responder con MotorChatOffline ===
+            if (DetectorConexion.EstarForzadoOffline())
+            {
+                await foreach (var chunk in EnviarMensajeOfflineStream(conversacionId, textoUsuario, ct))
+                    yield return chunk;
+                yield break;
+            }
+
             // Cargar historial
             var historial = CargarHistorial(conversacionId);
             var mensajesIA = ConstruirMensajesParaIA(historial);
@@ -330,7 +356,12 @@ namespace MadurezTecnologica.Logica
                 mensajesIA.Insert(0, new MensajeIA
                 {
                     Role = "user",
-                    Content = "Te compartí el informe de mi empresa y me entregaste el siguiente análisis..."
+                    Content =
+                        "A continuación te paso el informe técnico de mi empresa. " +
+                        "Tu primera respuesta será el análisis de madurez tecnológica que ya realizaste sobre él. " +
+                        "Después tendremos una conversación de seguimiento basada en ese análisis. " +
+                        "IMPORTANTE: tienes acceso completo al análisis previo que ya hiciste — está justo en tu siguiente mensaje. " +
+                        "NO me pidas que vuelva a compartir el informe ni digas que no tienes memoria; el análisis está disponible en el contexto."
                 });
             }
 
@@ -352,6 +383,19 @@ namespace MadurezTecnologica.Logica
             var respuestaCompleta = new System.Text.StringBuilder();
             string promptSistema = _constructorPrompt.PromptSistema();
 
+            // === DEBUG: imprimir qué se envía a Claude ===
+            System.Diagnostics.Debug.WriteLine("==========================================");
+            System.Diagnostics.Debug.WriteLine($"ENVIANDO A CLAUDE (conv {conversacionId}):");
+            System.Diagnostics.Debug.WriteLine($"  Prompt sistema: {(promptSistema?.Length ?? 0)} caracteres");
+            System.Diagnostics.Debug.WriteLine($"  Cantidad de mensajes: {mensajesIA.Count}");
+            for (int i = 0; i < mensajesIA.Count; i++)
+            {
+                var m = mensajesIA[i];
+                string preview = m.Content.Length > 120 ? m.Content.Substring(0, 120) + "..." : m.Content;
+                System.Diagnostics.Debug.WriteLine($"  [{i}] role='{m.Role}' content='{preview}'");
+            }
+            System.Diagnostics.Debug.WriteLine("==========================================");
+
             await foreach (var chunk in _clienteIA.EnviarConversacionStream(mensajesIA, promptSistema, ct))
             {
                 respuestaCompleta.Append(chunk);
@@ -367,6 +411,150 @@ namespace MadurezTecnologica.Logica
                 Timestamp = DateTime.Now,
                 Orden = orden + 1
             });
+        }
+
+        // ===================================================
+        // FLUJO OFFLINE — Refinamiento de diagnóstico final
+        // ===================================================
+        private Diagnostico RegenerarDiagnosticoFinalOffline(int conversacionId, List<Mensaje> historial)
+        {
+            var conv = _repoConversacion.ObtenerPorId(conversacionId);
+            var empresa = conv != null ? _repoEmpresa.ObtenerPorId(conv.EmpresaId) : null;
+
+            if (empresa == null)
+                throw new InvalidOperationException(
+                    "No se pudo obtener la empresa de la conversación para refinar offline.");
+
+            // Construir un "texto enriquecido" combinando:
+            //  - El análisis inicial (primer mensaje de IA)
+            //  - Los mensajes del usuario posteriores (información que aportó)
+            var sb = new System.Text.StringBuilder();
+            foreach (var msg in historial)
+            {
+                if (msg.Remitente == "IA" && msg.Orden == 1)
+                {
+                    // Primer mensaje de IA = análisis original; lo incluimos completo
+                    sb.AppendLine(msg.Contenido);
+                    sb.AppendLine();
+                }
+                else if (msg.Remitente == "Usuario")
+                {
+                    string contenido = msg.Contenido ?? "";
+                    if (contenido.StartsWith("[Solicitud") || contenido.StartsWith("[ANÁLISIS"))
+                        continue; // ignorar mensajes de sistema
+
+                    sb.AppendLine($"Información aportada por el usuario: {contenido}");
+                    sb.AppendLine();
+                }
+            }
+
+            string textoEnriquecido = sb.ToString();
+
+            // Re-ejecutar el motor offline con el texto enriquecido
+            var diagnosticoFinal = _motorOffline.AnalizarTexto(textoEnriquecido, empresa);
+            diagnosticoFinal.ConversacionId = conversacionId;
+            diagnosticoFinal.EsFinal = true;
+
+            // Desmarcar Finales anteriores (igual que online)
+            _repoDiagnostico.DesmarcarFinalesPorConversacion(conversacionId);
+
+            int idGuardado = _repoDiagnostico.Guardar(diagnosticoFinal);
+            diagnosticoFinal.Id = idGuardado;
+
+            // Persistir mensajes en el historial
+            int orden = CalcularSiguienteOrden(conversacionId);
+            _repoMensaje.Guardar(new Mensaje
+            {
+                ConversacionId = conversacionId,
+                Remitente = "Usuario",
+                Contenido = "[Refinamiento offline con toda la conversación]",
+                Timestamp = DateTime.Now,
+                Orden = orden
+            });
+
+            string respuestaSintetica =
+                $"[ANÁLISIS OFFLINE - Refinamiento]\n\n" +
+                $"Nuevo Nivel CMMI detectado: {diagnosticoFinal.NivelMadurez}\n\n" +
+                $"RESUMEN:\n{diagnosticoFinal.ResumenEmpresa}\n\n" +
+                $"FORTALEZAS:\n{diagnosticoFinal.Fortalezas}\n\n" +
+                $"DEBILIDADES:\n{diagnosticoFinal.Debilidades}\n\n" +
+                $"RIESGOS:\n{diagnosticoFinal.Riesgos}\n\n" +
+                $"RECOMENDACIONES:\n{diagnosticoFinal.Recomendaciones}\n\n" +
+                $"Este refinamiento se generó con el motor offline considerando la información adicional " +
+                $"que aportaste en la conversación. Para un análisis más profundo y matizado, repite el " +
+                $"refinamiento con la IA conectada.";
+
+            _repoMensaje.Guardar(new Mensaje
+            {
+                ConversacionId = conversacionId,
+                Remitente = "IA",
+                Contenido = respuestaSintetica,
+                Timestamp = DateTime.Now,
+                Orden = orden + 1
+            });
+
+            return diagnosticoFinal;
+        }
+
+        // ===================================================
+        // FLUJO OFFLINE — Chat por plantillas
+        // ===================================================
+        private async IAsyncEnumerable<string> EnviarMensajeOfflineStream(
+            int conversacionId,
+            string textoUsuario,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        {
+            // 1. Persistir mensaje del usuario
+            int orden = CalcularSiguienteOrden(conversacionId);
+            _repoMensaje.Guardar(new Mensaje
+            {
+                ConversacionId = conversacionId,
+                Remitente = "Usuario",
+                Contenido = textoUsuario,
+                Timestamp = DateTime.Now,
+                Orden = orden
+            });
+
+            // 2. Obtener contexto: empresa + último diagnóstico
+            var conv = _repoConversacion.ObtenerPorId(conversacionId);
+            Empresa? empresa = conv != null ? _repoEmpresa.ObtenerPorId(conv.EmpresaId) : null;
+            var historialDiag = _repoDiagnostico.ObtenerHistorialPorConversacion(conv?.Id ?? 0)
+                                                 .OrderByDescending(d => d.FechaGeneracion)
+                                                 .ToList();
+            var ultimoDiag = historialDiag.FirstOrDefault();
+            var anteriorDiag = historialDiag.Skip(1).FirstOrDefault();
+
+            // 3. Generar respuesta con el motor offline (con contexto de comparación)
+            string respuesta = _motorChatOffline.GenerarRespuesta(
+                textoUsuario, ultimoDiag, empresa, anteriorDiag);
+
+            // 4. Persistir respuesta completa de una vez
+            _repoMensaje.Guardar(new Mensaje
+            {
+                ConversacionId = conversacionId,
+                Remitente = "IA",
+                Contenido = respuesta,
+                Timestamp = DateTime.Now,
+                Orden = orden + 1
+            });
+
+            // 5. Emitir como chunks simulados (palabra por palabra para mantener UX fluida)
+            foreach (var chunk in SimularStreaming(respuesta))
+            {
+                if (ct.IsCancellationRequested) yield break;
+                await Task.Delay(25, ct);
+                yield return chunk;
+            }
+        }
+
+        private IEnumerable<string> SimularStreaming(string texto)
+        {
+            // Dividimos por palabras manteniendo los espacios para que la concatenación sea natural
+            var palabras = texto.Split(' ');
+            for (int i = 0; i < palabras.Length; i++)
+            {
+                yield return i == 0 ? palabras[i] : " " + palabras[i];
+            }
         }
 
     }
