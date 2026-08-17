@@ -17,13 +17,49 @@
 
     <!-- Compresión para reducir tamaño del exe final -->
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+
+    <!-- Icono del ejecutable y de la ventana principal -->
+    <ApplicationIcon>Recursos\Iconos\app.ico</ApplicationIcon>
+
+    <!-- Manifest (para longPathAware y declaración de compatibilidad con Windows). -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- DPI-awareness gestionado por WinForms (.NET 8+). PerMonitorV2 = escalado
+         nítido en monitores con 125/150/200% de escala y respuesta al mover la
+         ventana entre pantallas de distinta densidad. WinForms se encarga de
+         propagar la config al runtime; no hace falta SetHighDpiMode en código. -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Copia appconfi.json al lado del .exe en cada publish -->
-    <None Update="appconfi.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <!-- appconfi.json se EMBEBE dentro del ejecutable (recurso embebido), para que el
+         .exe single-file funcione solo, sin necesitar el archivo de config al lado.
+         Configuracion.cs lo lee del recurso embebido si no encuentra el archivo. -->
+    <None Remove="appconfi.json" />
+    <EmbeddedResource Include="appconfi.json" />
+
+    <!-- Iconos PNG embebidos: los lee CargadorIconos desde recursos embebidos, para
+         que el .exe single-file siga funcionando solo, sin archivos externos. -->
+    <None Remove="Recursos\Iconos\app.png" />
+    <None Remove="Recursos\Iconos\inicio.png" />
+    <None Remove="Recursos\Iconos\empresas.png" />
+    <None Remove="Recursos\Iconos\cargar_informe.png" />
+    <None Remove="Recursos\Iconos\chat.png" />
+    <None Remove="Recursos\Iconos\resultados.png" />
+    <None Remove="Recursos\Iconos\historial.png" />
+    <None Remove="Recursos\Iconos\analizar.png" />
+    <None Remove="Recursos\Iconos\word.png" />
+    <None Remove="Recursos\Iconos\pdf.png" />
+    <EmbeddedResource Include="Recursos\Iconos\app.png" />
+    <EmbeddedResource Include="Recursos\Iconos\inicio.png" />
+    <EmbeddedResource Include="Recursos\Iconos\empresas.png" />
+    <EmbeddedResource Include="Recursos\Iconos\cargar_informe.png" />
+    <EmbeddedResource Include="Recursos\Iconos\chat.png" />
+    <EmbeddedResource Include="Recursos\Iconos\resultados.png" />
+    <EmbeddedResource Include="Recursos\Iconos\historial.png" />
+    <EmbeddedResource Include="Recursos\Iconos\analizar.png" />
+    <EmbeddedResource Include="Recursos\Iconos\word.png" />
+    <EmbeddedResource Include="Recursos\Iconos\pdf.png" />
   </ItemGroup>
 
   <ItemGroup>

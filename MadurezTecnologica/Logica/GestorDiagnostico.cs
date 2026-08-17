@@ -25,7 +25,7 @@ namespace MadurezTecnologica.Logica
         }
 
         // Valida que el texto del PDF realmente corresponda a la empresa indicada
-        public async Task<ResultadoValidacion> ValidarCoherenciaPDF(string textoInforme, Empresa empresa)
+        public async Task<ResultadoValidacion> ValidarCoherenciaPDF(string textoInforme, Empresa empresa, CancellationToken ct = default)
         {
             // Paso 1: Normalizar ambos textos para comparación
             string nombreNormalizado = NormalizarTexto(empresa.Nombre);
@@ -63,7 +63,7 @@ namespace MadurezTecnologica.Logica
                     empresa.Sector
                 );
 
-                string respuestaIA = await _clienteIA.EnviarMensaje(promptValidacion);
+                string respuestaIA = await _clienteIA.EnviarMensaje(promptValidacion, null, ct);
                 string respuestaNormalizada = respuestaIA.Trim().ToUpper();
 
                 bool coherente = respuestaNormalizada.StartsWith("SI") || respuestaNormalizada.StartsWith("SÍ"); // Se asume que Claude responderá con un "Sí" o "No" claro al inicio de su respuesta para indicar la coherencia
@@ -76,6 +76,17 @@ namespace MadurezTecnologica.Logica
                         : "La IA determinó que el informe no corresponde a la empresa indicada",
                     MetodoUsado = "IA"
                 };
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancelación (usuario o caída de red): dejar propagar para abortar el flujo.
+                throw;
+            }
+            catch (VpnRequeridaException)
+            {
+                // Bloqueo regional (VPN apagada): dejar propagar para mostrar el mensaje
+                // correcto, en vez de reportarlo como "el informe no corresponde".
+                throw;
             }
             catch (Exception ex)
             {
@@ -90,7 +101,7 @@ namespace MadurezTecnologica.Logica
         }
 
         // Realiza el diagnóstico completo utilizando Claude, devuelve el diagnóstico estructurado y el texto crudo de la respuesta
-        public async Task<(Diagnostico diagnostico, string textoCrudo)> RealizarDiagnostico(string textoInforme, Empresa empresa)
+        public async Task<(Diagnostico diagnostico, string textoCrudo)> RealizarDiagnostico(string textoInforme, Empresa empresa, CancellationToken ct = default)
         {
             string promptSistema = _constructorPrompt.PromptSistema();
             string promptAnalisis = _constructorPrompt.PromptAnalisisInforme(
@@ -99,7 +110,7 @@ namespace MadurezTecnologica.Logica
                 empresa.Sector
             );
 
-            string textoCrudo = await _clienteIA.EnviarMensaje(promptAnalisis, promptSistema);
+            string textoCrudo = await _clienteIA.EnviarMensaje(promptAnalisis, promptSistema, ct);
             Diagnostico diagnostico = ParsearRespuesta(textoCrudo); // El método ParsearRespuesta se encarga de extraer el nivel de madurez, fortalezas, debilidades, riesgos y recomendaciones del texto crudo devuelto por Claude
 
             return (diagnostico, textoCrudo); // Devuelve tanto el diagnóstico estructurado como el texto crudo para que pueda ser almacenado o revisado posteriormente

@@ -1,9 +1,29 @@
-﻿using MadurezTecnologica.Modelos;
+﻿using MadurezTecnologica.Datos;
+using MadurezTecnologica.Modelos;
 
 namespace MadurezTecnologica.Logica
 {
     public class MotorOffline
     {
+        // Paquete heurístico activo (destilado de Claude por el Destilador).
+        // Se carga bajo demanda; si no hay paquete activo se comporta como antes.
+        private PaqueteHeuristico? _paqueteActivo;
+        private bool _paqueteCargado = false;
+
+        private PaqueteHeuristico? PaqueteActivo
+        {
+            get
+            {
+                if (!_paqueteCargado)
+                {
+                    try { _paqueteActivo = new RepositorioPaqueteHeuristico().ObtenerActivo(); }
+                    catch { _paqueteActivo = null; }
+                    _paqueteCargado = true;
+                }
+                return _paqueteActivo;
+            }
+        }
+
         
         // Estas son las palabras o frases que indican prácticas asociadas a cada nivel de madurez
        
@@ -68,17 +88,39 @@ namespace MadurezTecnologica.Logica
             // Normalizar texto para hacer matching insensible a mayúsculas
             string textoNormalizado = textoInforme.ToLowerInvariant();
 
-            // Contar matches de cada nivel
-            int puntos1 = ContarMatches(textoNormalizado, _keywordsNivel1);
-            int puntos2 = ContarMatches(textoNormalizado, _keywordsNivel2);
-            int puntos3 = ContarMatches(textoNormalizado, _keywordsNivel3);
-            int puntos4 = ContarMatches(textoNormalizado, _keywordsNivel4);
-            int puntos5 = ContarMatches(textoNormalizado, _keywordsNivel5);
+            // Contar matches de las listas BASE (peso 1 cada uno)
+            double p1 = ContarMatches(textoNormalizado, _keywordsNivel1);
+            double p2 = ContarMatches(textoNormalizado, _keywordsNivel2);
+            double p3 = ContarMatches(textoNormalizado, _keywordsNivel3);
+            double p4 = ContarMatches(textoNormalizado, _keywordsNivel4);
+            double p5 = ContarMatches(textoNormalizado, _keywordsNivel5);
 
-            // Determinar el nivel ganador
-            int nivelDeterminado = DeterminarNivel(puntos1, puntos2, puntos3, puntos4, puntos5);
+            // Aporte de los indicadores DESTILADOS del paquete activo (peso = asociación).
+            // Si no hay paquete activo, este bloque no altera nada.
+            var paquete = PaqueteActivo;
+            if (paquete != null)
+            {
+                foreach (var ind in paquete.Indicadores)
+                {
+                    if (textoNormalizado.Contains(ind.Termino)
+                        && !ContextoNegado(textoNormalizado, ind.Termino))
+                    {
+                        switch (ind.Nivel)
+                        {
+                            case 1: p1 += ind.Peso; break;
+                            case 2: p2 += ind.Peso; break;
+                            case 3: p3 += ind.Peso; break;
+                            case 4: p4 += ind.Peso; break;
+                            case 5: p5 += ind.Peso; break;
+                        }
+                    }
+                }
+            }
 
-            // Construir diagnóstico estructurado
+            int nivelDeterminado = DeterminarNivel(p1, p2, p3, p4, p5);
+
+            // Construir diagnóstico estructurado. Marcamos Origen="OFFLINE" para que
+            // el Destilador NO aprenda de sus propios outputs (evita loop degradante).
             var diagnostico = new Diagnostico
             {
                 NivelMadurez = nivelDeterminado,
@@ -88,7 +130,8 @@ namespace MadurezTecnologica.Logica
                 Riesgos = GenerarRiesgos(nivelDeterminado),
                 Recomendaciones = GenerarRecomendacionesPorGaps(textoNormalizado, nivelDeterminado),
                 FechaGeneracion = DateTime.Now,
-                EsFinal = false
+                EsFinal = false,
+                Origen = "OFFLINE"
             };
 
             return diagnostico;
@@ -139,21 +182,31 @@ namespace MadurezTecnologica.Logica
             return total;
         }
 
-        private int DeterminarNivel(int p1, int p2, int p3, int p4, int p5)
+        private int DeterminarNivel(double p1, double p2, double p3, double p4, double p5)
         {
-            // Estrategia: el nivel con más matches gana
+            // Estrategia: el nivel con mayor puntaje gana
             // En caso de empate, gana el nivel MÁS BAJO (más conservador)
+            double max = Math.Max(p1, Math.Max(p2, Math.Max(p3, Math.Max(p4, p5))));
 
-            int max = Math.Max(p1, Math.Max(p2, Math.Max(p3, Math.Max(p4, p5))));
-
-            // Si nadie tiene matches, asumimos nivel 1 (caso peor)
-            if (max == 0) return 1;
-
+            if (max <= 0) return 1;
             if (p1 == max) return 1;
             if (p2 == max) return 2;
             if (p3 == max) return 3;
             if (p4 == max) return 4;
             return 5;
+        }
+
+        // Detector de negación público a nivel de este método (mismo criterio que ContarMatches:
+        // busca negadores en los 40 chars anteriores). Reutilizado por el aporte destilado.
+        private bool ContextoNegado(string texto, string termino)
+        {
+            int pos = texto.IndexOf(termino);
+            if (pos < 0) return false;
+            int inicio = Math.Max(0, pos - 40);
+            string contexto = texto.Substring(inicio, pos - inicio);
+            foreach (var neg in _palabrasNegacion)
+                if (contexto.Contains(neg)) return true;
+            return false;
         }
 
         // ===================================================
@@ -302,6 +355,25 @@ namespace MadurezTecnologica.Logica
             {
                 // Fallback si ningún gap tenía descripción humana
                 return GenerarRecomendaciones(nivelActual);
+            }
+
+            // Enriquecer con recomendaciones DESTILADAS del paquete activo (si existen)
+            // aplicables al nivel siguiente. Máximo 3 para no saturar.
+            var paquete = PaqueteActivo;
+            if (paquete != null)
+            {
+                var extras = paquete.Recomendaciones
+                    .Where(r => r.Nivel == nivelSiguiente.ToString())
+                    .OrderByDescending(r => r.Frecuencia)
+                    .Take(3)
+                    .ToList();
+                if (extras.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("Prácticas destiladas del historial de análisis IA (recurrentes en dictámenes previos):");
+                    foreach (var r in extras)
+                        sb.AppendLine($"- {char.ToUpper(r.Texto[0]) + r.Texto.Substring(1)}");
+                }
             }
 
             sb.AppendLine();

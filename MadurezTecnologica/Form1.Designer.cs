@@ -67,7 +67,7 @@
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
             ClientSize = new Size(968, 450);
             Controls.Add(btnDescargarPlantilla);
             Controls.Add(txtResultado);

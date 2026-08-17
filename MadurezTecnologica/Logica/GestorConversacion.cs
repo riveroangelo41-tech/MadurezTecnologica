@@ -43,6 +43,24 @@ namespace MadurezTecnologica.Logica
             var lista = new List<MensajeIA>();
             foreach (var m in mensajes)
             {
+                // Mensaje de contexto con el INFORME real (Orden 0). Se envía a la IA
+                // enmarcado como texto del usuario, para que Claude tenga el informe
+                // original y pueda analizarlo de verdad (clave cuando el análisis previo
+                // fue offline/genérico). No se muestra en el chat.
+                if (m.Remitente == "INFORME")
+                {
+                    lista.Add(new MensajeIA
+                    {
+                        Role = "user",
+                        Content =
+                            "Este es el informe técnico de mi empresa. Úsalo como base para evaluar " +
+                            "su madurez tecnológica (modelo CMMI) y para responder mis preguntas. " +
+                            "El informe está disponible aquí mismo; no digas que no lo tienes ni que " +
+                            "los datos son inventados.\n\n=== INFORME TÉCNICO ===\n" + m.Contenido
+                    });
+                    continue;
+                }
+
                 lista.Add(new MensajeIA
                 {
                     Role = (m.Remitente == "IA") ? "assistant" : "user", // Asume que los mensajes de la IA tienen Remitente "IA"
@@ -194,8 +212,8 @@ namespace MadurezTecnologica.Logica
                     "Esta conversación solo tiene el análisis inicial.");
             }
 
-            // === RAMA OFFLINE ===
-            if (DetectorConexion.EstarForzadoOffline())
+            // === RAMA OFFLINE (forzado por el usuario O sin conexión detectada) ===
+            if (DetectorConexion.EstaOffline())
             {
                 return RegenerarDiagnosticoFinalOffline(conversacionId, historial);
             }
@@ -237,9 +255,11 @@ namespace MadurezTecnologica.Logica
             //  Enviar a Claude =
 
             string promptSistema = _constructorPrompt.PromptSistema();
-            string respuestaCruda = await _clienteIA.EnviarConversacion(mensajesIA, promptSistema);
+            // Si la red se cae durante la generación, el token de conexión aborta la petición.
+            string respuestaCruda = await _clienteIA.EnviarConversacion(
+                mensajesIA, promptSistema, DetectorConexion.TokenConexion);
 
-            // Parsear 
+            // Parsear
 
             var diagnosticoFinal = _gestorDiagnostico.ParsearRespuesta(respuestaCruda);
             diagnosticoFinal.ConversacionId = conversacionId;
@@ -252,7 +272,10 @@ namespace MadurezTecnologica.Logica
             int idGuardado = _repoDiagnostico.Guardar(diagnosticoFinal);
             diagnosticoFinal.Id = idGuardado;
 
-            // Persistir también la solicitud y la respuesta en el historial 
+            // Corpus IA actualizado con un dictamen final nuevo → destilar en background.
+            DestilacionAutomatica.DispararEnBackground();
+
+            // Persistir también la solicitud y la respuesta en el historial
 
             int ordenSolicitud = CalcularSiguienteOrden(conversacionId); // Calcular el siguiente orden para asignar a los nuevos mensajes que se van a guardar en el historial. Esto asegura que los mensajes se mantengan en el orden correcto dentro de la conversación.
             // Guardar la solicitud de diagnóstico final como un nuevo mensaje en el historial de la conversación, con el remitente "Usuario" y el contenido indicando que se trata de una solicitud de diagnóstico final que incluye toda la conversación previa. Esto permite mantener un registro completo de la interacción y el contexto que llevó a la generación del diagnóstico final.
@@ -339,8 +362,15 @@ namespace MadurezTecnologica.Logica
             if (!_repoConversacion.Existe(conversacionId))
                 throw new ArgumentException($"La conversación con ID {conversacionId} no existe.");
 
+            // Enlazar la cancelación con el token de conexión: si la red se cae a mitad
+            // del streaming, este token se cancela y aborta la respuesta de la IA.
+            using var ctsEnlazado = CancellationTokenSource.CreateLinkedTokenSource(
+                ct, DetectorConexion.TokenConexion);
+            ct = ctsEnlazado.Token;
+
             // === RAMA OFFLINE — responder con MotorChatOffline ===
-            if (DetectorConexion.EstarForzadoOffline())
+            // (forzado por el usuario O sin conexión detectada por el monitor)
+            if (DetectorConexion.EstaOffline())
             {
                 await foreach (var chunk in EnviarMensajeOfflineStream(conversacionId, textoUsuario, ct))
                     yield return chunk;

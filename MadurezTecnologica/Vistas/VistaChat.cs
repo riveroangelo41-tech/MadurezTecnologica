@@ -70,8 +70,9 @@ namespace MadurezTecnologica.Vistas
                 // Obtener empresa activa del estado global
                 _empresaIdActiva = Estado.EstadoApp.EmpresaActivaId;
 
-                // Suscribirse al evento de cambio de empresa
+                // Suscribirse a los eventos globales de estado
                 Estado.EstadoApp.EmpresaActivaCambio += OnEmpresaActivaCambio;
+                Estado.EstadoApp.HistorialCambio += OnHistorialCambio;
 
                 this.BeginInvoke(new Action(() => CargarEvaluacionesDeEmpresa()));
             };
@@ -80,6 +81,7 @@ namespace MadurezTecnologica.Vistas
             this.HandleDestroyed += (s, e) =>
             {
                 Estado.EstadoApp.EmpresaActivaCambio -= OnEmpresaActivaCambio;
+                Estado.EstadoApp.HistorialCambio -= OnHistorialCambio;
             };
 
             // Activar double buffering en el flow de mensajes
@@ -791,6 +793,10 @@ namespace MadurezTecnologica.Vistas
 
                 foreach (var msg in mensajes)
                 {
+                    // El mensaje "INFORME" (texto crudo del PDF) es solo contexto para la IA,
+                    // no se muestra en el chat.
+                    if (msg.Remitente == "INFORME") continue;
+
                     AgregarBurbuja(msg.Remitente, msg.Contenido, msg.Timestamp);
                 }
             }
@@ -1292,6 +1298,35 @@ namespace MadurezTecnologica.Vistas
                     ScrollAlFinal();
                 }
             }
+            catch (OperationCanceledException)
+            {
+                // Cancelación: si fue por caída de red, avisar; si no, silencioso.
+                timerCursor.Stop();
+                timerScrollContinuo.Stop();
+                OcultarIndicadorEscribiendo();
+
+                if (!Inteligencia.DetectorConexion.HayConexion)
+                {
+                    Estilos.MensajeApp.Advertencia(
+                        "Se perdió la conexión a internet durante la respuesta.\n\n" +
+                        "El sistema pasó a modo offline. Vuelve a enviar tu mensaje y se " +
+                        "responderá con el motor local, o espera a que regrese la conexión.",
+                        "Conexión perdida", this.FindForm());
+                }
+            }
+            catch (Inteligencia.VpnRequeridaException)
+            {
+                timerCursor.Stop();
+                timerScrollContinuo.Stop();
+                OcultarIndicadorEscribiendo();
+                Estilos.MensajeApp.Advertencia(
+                    "🔒 La VPN está apagada.\n\n" +
+                    "El asistente de IA no está disponible en tu región sin la VPN. " +
+                    "Enciéndela e intenta enviar tu mensaje de nuevo.\n\n" +
+                    "Mientras tanto, puedes activar el modo offline (indicador del header) " +
+                    "para responder con el motor local.",
+                    "Se requiere VPN", this.FindForm());
+            }
             catch (Exception ex)
             {
                 timerCursor.Stop();
@@ -1553,6 +1588,16 @@ namespace MadurezTecnologica.Vistas
             {
                 Estilos.MensajeApp.Info(ex.Message, "No es posible aún", this.FindForm());
             }
+            catch (Inteligencia.VpnRequeridaException)
+            {
+                Estilos.MensajeApp.Advertencia(
+                    "🔒 La VPN está apagada.\n\n" +
+                    "Generar la evaluación con IA no está disponible en tu región sin la VPN. " +
+                    "Enciéndela e inténtalo de nuevo.\n\n" +
+                    "También puedes activar el modo offline (indicador del header) para generarla " +
+                    "con el motor local.",
+                    "Se requiere VPN", this.FindForm());
+            }
             catch (Exception ex)
             {
                 Estilos.MensajeApp.Error($"Error al generar la evaluación: {ex.Message}",
@@ -1767,7 +1812,8 @@ namespace MadurezTecnologica.Vistas
 
             if (_lblTituloHeader == null || _lblSubtituloHeader == null) return;
 
-            bool offline = Inteligencia.DetectorConexion.EstarForzadoOffline();
+            // Offline efectivo: forzado por el usuario O sin conexión detectada.
+            bool offline = Inteligencia.DetectorConexion.EstaOffline();
 
             if (offline)
             {
@@ -2062,6 +2108,18 @@ namespace MadurezTecnologica.Vistas
         {
             _empresaIdActiva = Estado.EstadoApp.EmpresaActivaId;
             _conversacionActivaId = null;   // Reset porque cambiamos de empresa
+            CargarEvaluacionesDeEmpresa();
+        }
+
+        // Se dispara cuando se elimina historial en otra vista. Recarga las evaluaciones
+        // de la empresa activa para reflejar el cambio al instante (sin cambiar de empresa).
+        private void OnHistorialCambio()
+        {
+            // No interrumpir un envío/streaming en curso (rompería la burbuja en progreso).
+            if (_enviandoMensaje) return;
+
+            _empresaIdActiva = Estado.EstadoApp.EmpresaActivaId;
+            _conversacionActivaId = null;   // la conversación pudo haberse eliminado
             CargarEvaluacionesDeEmpresa();
         }
 

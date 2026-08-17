@@ -63,7 +63,7 @@ namespace MadurezTecnologica.Inteligencia
 
         private static readonly HttpClient _httpClient = new HttpClient();
 
-        public async Task<string> EnviarMensaje(string mensajeUsuario, string? promptSistema = null)
+        public async Task<string> EnviarMensaje(string mensajeUsuario, string? promptSistema = null, CancellationToken ct = default)
         {
             var peticion = new PeticionIA
             {
@@ -81,15 +81,20 @@ namespace MadurezTecnologica.Inteligencia
             request.Headers.Add("anthropic-version", "2023-06-01");
             request.Content = JsonContent.Create(peticion);
 
-            var response = await _httpClient.SendAsync(request);
+            // El token permite abortar la petición si se cae la red a mitad de camino.
+            var response = await _httpClient.SendAsync(request, ct);
+
+            // 403 = bloqueo regional de la API → se necesita la VPN encendida.
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                throw new VpnRequeridaException();
 
             if (!response.IsSuccessStatusCode)
             {
-                var errorBody = await response.Content.ReadAsStringAsync();
+                var errorBody = await response.Content.ReadAsStringAsync(ct);
                 throw new Exception($"Error de la API ({response.StatusCode}): {errorBody}");
             }
 
-            var respuesta = await response.Content.ReadFromJsonAsync<RespuestaIA>();
+            var respuesta = await response.Content.ReadFromJsonAsync<RespuestaIA>(ct);
 
             if (respuesta == null || respuesta.Content.Count == 0)
             {
@@ -99,7 +104,7 @@ namespace MadurezTecnologica.Inteligencia
             return respuesta.Content[0].Text;
         }
 
-        public async Task<string> EnviarConversacion(List<MensajeIA> mensajes, string? promptSistema = null)
+        public async Task<string> EnviarConversacion(List<MensajeIA> mensajes, string? promptSistema = null, CancellationToken ct = default)
         {
             var peticion = new PeticionIA
             {
@@ -114,15 +119,19 @@ namespace MadurezTecnologica.Inteligencia
             request.Headers.Add("anthropic-version", "2023-06-01");
             request.Content = JsonContent.Create(peticion);
 
-            var response = await _httpClient.SendAsync(request);
+            var response = await _httpClient.SendAsync(request, ct);
+
+            // 403 = bloqueo regional de la API → se necesita la VPN encendida.
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                throw new VpnRequeridaException();
 
             if (!response.IsSuccessStatusCode)
             {
-                var errorBody = await response.Content.ReadAsStringAsync();
+                var errorBody = await response.Content.ReadAsStringAsync(ct);
                 throw new Exception($"Error de la API ({response.StatusCode}): {errorBody}");
             }
 
-            var respuesta = await response.Content.ReadFromJsonAsync<RespuestaIA>();
+            var respuesta = await response.Content.ReadFromJsonAsync<RespuestaIA>(ct);
 
             if (respuesta == null || respuesta.Content.Count == 0)
             {
@@ -132,7 +141,7 @@ namespace MadurezTecnologica.Inteligencia
             return respuesta.Content[0].Text;
         }
 
-        
+
         // STREAMING: devuelve la respuesta chunk por chunk
         
         public async IAsyncEnumerable<string> EnviarConversacionStream(
@@ -163,6 +172,11 @@ namespace MadurezTecnologica.Inteligencia
             };
 
             using var response = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+
+            // 403 = bloqueo regional de la API → se necesita la VPN encendida.
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                throw new VpnRequeridaException();
+
             response.EnsureSuccessStatusCode();
 
             using var stream = await response.Content.ReadAsStreamAsync(ct);

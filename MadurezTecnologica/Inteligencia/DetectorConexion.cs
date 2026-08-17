@@ -24,6 +24,28 @@ namespace MadurezTecnologica.Inteligencia
 
         public static bool _modoOfflineForzado = false; // variable para almacenar el estado del modo offline forzado
 
+        // Conexión real detectada por el monitor de fondo. Se asume conectado al inicio
+        // hasta el primer chequeo. El monitor la actualiza cada X segundos.
+        private static bool _hayConexionDetectada = true;
+        public static bool HayConexion => _hayConexionDetectada;
+
+        // Estado offline EFECTIVO: el usuario lo forzó O no hay conexión detectada.
+        // Es la fuente de verdad que deben usar el chat, el análisis y la UI para
+        // decidir si operan con la IA o con el motor local.
+        public static bool EstaOffline() => _modoOfflineForzado || !_hayConexionDetectada;
+
+        // Token que se CANCELA en el instante en que se pierde la conexión.
+        // Toda petición a la IA (análisis de PDF o chat) enlaza su cancelación a este
+        // token, de modo que si la red se cae a mitad de la petición, ésta se aborta.
+        // Al recuperarse la conexión se genera un token nuevo y limpio.
+        private static CancellationTokenSource _ctsConexion = new CancellationTokenSource();
+        private static readonly object _ctsLock = new object();
+
+        public static CancellationToken TokenConexion
+        {
+            get { lock (_ctsLock) { return _ctsConexion.Token; } }
+        }
+
         // Evento global que se dispara cuando el modo cambia.
         // Todos los IndicadorModoConexion se suscriben para mantenerse sincronizados.
         public static event Action? ModoCambio;
@@ -52,7 +74,63 @@ namespace MadurezTecnologica.Inteligencia
         }
 
         public static bool EstarForzadoOffline() => _modoOfflineForzado;
-           
+
+        // ===================================================
+        // MONITOR DE CONEXIÓN EN SEGUNDO PLANO
+        // Chequea periódicamente si hay internet y, si el estado cambia,
+        // dispara ModoCambio para que toda la UI y la lógica se actualicen.
+        // ===================================================
+        private static System.Threading.Timer? _monitor;
+        private static readonly DetectorConexion _detectorMonitor = new DetectorConexion();
+
+        public static void IniciarMonitoreo(int intervaloSegundos = 15)
+        {
+            if (_monitor != null) return;   // ya está corriendo
+
+            _monitor = new System.Threading.Timer(
+                callback: _ => _ = VerificarConexionEnFondo(),
+                state: null,
+                dueTime: TimeSpan.Zero,                              // primer chequeo inmediato
+                period: TimeSpan.FromSeconds(intervaloSegundos));    // luego cada X segundos
+        }
+
+        private static async Task VerificarConexionEnFondo()
+        {
+            try
+            {
+                // Forzar un chequeo real cada tick (ignorar el caché de 30s)
+                InvalidarCacheConexion();
+                bool hay = await _detectorMonitor.HayInternet();
+
+                if (hay != _hayConexionDetectada)
+                {
+                    _hayConexionDetectada = hay;
+
+                    lock (_ctsLock)
+                    {
+                        if (!hay)
+                        {
+                            // Se perdió la conexión → abortar cualquier petición en curso.
+                            _ctsConexion.Cancel();
+                        }
+                        else
+                        {
+                            // Volvió la conexión → token nuevo para las próximas peticiones.
+                            _ctsConexion.Dispose();
+                            _ctsConexion = new CancellationTokenSource();
+                        }
+                    }
+
+                    // Los handlers de la UI marshalizan al hilo de UI por su cuenta.
+                    ModoCambio?.Invoke();
+                }
+            }
+            catch
+            {
+                // El monitor nunca debe tumbar la app; si falla, se reintenta al próximo tick.
+            }
+        }
+
         // Caché del resultado de HayInternet: evita golpear la red en cada llamada.
         // Las llamadas dentro del TTL devuelven el último resultado sin consultar.
         private static bool? _cacheHayInternet = null;

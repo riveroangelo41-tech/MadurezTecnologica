@@ -972,6 +972,10 @@ namespace MadurezTecnologica.Vistas
 
                 form.Close();
                 CargarEmpresaActiva();
+
+                // Avisar a las demás vistas (Chat, Resultados) que el historial cambió,
+                // para que se refresquen al instante sin tener que cambiar de empresa.
+                Estado.EstadoApp.NotificarHistorialCambio();
             };
             btnEliminar.Click += eliminarClick;
             lblBtnEliminar.Click += eliminarClick;

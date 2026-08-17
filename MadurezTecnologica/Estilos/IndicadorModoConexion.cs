@@ -91,7 +91,7 @@ namespace MadurezTecnologica.Estilos
             var g = e.Graphics;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
-            Color color = DetectorConexion.EstarForzadoOffline() ? NaranjaOffline : VerdeConectado;
+            Color color = DetectorConexion.EstaOffline() ? NaranjaOffline : VerdeConectado;
 
             // Halo translúcido
             using var halo = new SolidBrush(Color.FromArgb(60, color));
@@ -104,11 +104,25 @@ namespace MadurezTecnologica.Estilos
 
         private void OnClick(object? sender, EventArgs e)
         {
+            var owner = FindForm();
+
+            // Si NO hay conexión a internet, el toggle manual no hace nada:
+            // el sistema ya está offline automáticamente y no puede volver a online.
+            if (!DetectorConexion.HayConexion)
+            {
+                MensajeApp.Info(
+                    "No hay conexión a internet.\n\n" +
+                    "El sistema ya está operando en modo offline de forma automática. " +
+                    "Cuando se restablezca la conexión, volverá al modo conectado por sí solo.",
+                    "Sin conexión",
+                    owner);
+                return;
+            }
+
             DetectorConexion.AlternarModoOfflineForzado();
 
             // Avisar al usuario del cambio
             bool ahoraOffline = DetectorConexion.EstarForzadoOffline();
-            var owner = FindForm();
 
             if (ahoraOffline)
             {
@@ -140,11 +154,35 @@ namespace MadurezTecnologica.Estilos
                 return;
             }
 
-            bool offline = DetectorConexion.EstarForzadoOffline();
-            _lblEstado.Text = offline ? "Modo Offline" : "Conectado a IA";
-            _lblEstado.ForeColor = offline
-                ? ColorTranslator.FromHtml("#A6620D")
-                : Paleta.TextoOscuro;
+            bool sinRed = !DetectorConexion.HayConexion;
+            bool forzado = DetectorConexion.EstarForzadoOffline();
+            Color naranja = ColorTranslator.FromHtml("#A6620D");
+
+            if (sinRed)
+            {
+                // Sin conexión detectada: el toggle no aplica (cursor normal).
+                _lblEstado.Text = "Sin conexión";
+                _lblEstado.ForeColor = naranja;
+                Cursor = Cursors.Default;
+                _lblEstado.Cursor = Cursors.Default;
+                _puntoEstado.Cursor = Cursors.Default;
+            }
+            else if (forzado)
+            {
+                _lblEstado.Text = "Modo Offline";
+                _lblEstado.ForeColor = naranja;
+                Cursor = Cursors.Hand;
+                _lblEstado.Cursor = Cursors.Hand;
+                _puntoEstado.Cursor = Cursors.Hand;
+            }
+            else
+            {
+                _lblEstado.Text = "Conectado a IA";
+                _lblEstado.ForeColor = Paleta.TextoOscuro;
+                Cursor = Cursors.Hand;
+                _lblEstado.Cursor = Cursors.Hand;
+                _puntoEstado.Cursor = Cursors.Hand;
+            }
             _puntoEstado.Invalidate();
         }
     }

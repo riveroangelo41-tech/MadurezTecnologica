@@ -45,15 +45,28 @@ namespace MadurezTecnologica.Logica
             _repoDiagnostico = new RepositorioDiagnostico();
         }
 
-        public async Task<ResultadoAnalisis> AnalizarInformePdf(string rutaPdf, Empresa empresa)
+        public async Task<ResultadoAnalisis> AnalizarInformePdf(
+            string rutaPdf,
+            Empresa empresa,
+            CancellationToken ct = default,
+            Action<string>? progreso = null)
         {
             var resultado = new ResultadoAnalisis
             {
                 FechaAnalisis = DateTime.Now
             };
 
+            // Enlazar la cancelación del usuario con la del monitor de conexión: si la red
+            // se cae a mitad del análisis, este token se cancela y aborta la petición a la IA.
+            using var ctsEnlazado = CancellationTokenSource.CreateLinkedTokenSource(
+                ct, Inteligencia.DetectorConexion.TokenConexion);
+            ct = ctsEnlazado.Token;
+
             try
             {
+                progreso?.Invoke("Validando archivo PDF...");
+                ct.ThrowIfCancellationRequested();
+
                 // PASO 1: Validar PDF
                 if (!_gestorInforme.EsPdfValido(rutaPdf))
                 {
@@ -63,12 +76,16 @@ namespace MadurezTecnologica.Logica
                 }
 
                 // PASO 2: Detectar modo
+                progreso?.Invoke("Detectando modo de operación...");
                 var modo = await _detectorConexion.DetectarModo();
                 resultado.ModoUsado = modo;
+                ct.ThrowIfCancellationRequested();
 
                 // PASO 3: Extraer texto del PDF (común a ambos modos)
+                progreso?.Invoke("Extrayendo texto del PDF...");
                 string textoInforme = _gestorInforme.ExtraerTexto(rutaPdf);
                 resultado.CaracteresProcesados = textoInforme.Length;
+                ct.ThrowIfCancellationRequested();
 
                 if (string.IsNullOrWhiteSpace(textoInforme))
                 {
@@ -80,14 +97,17 @@ namespace MadurezTecnologica.Logica
                 // PASO 4: Decidir flujo según modo
                 if (modo != ModoOperacion.Online)
                 {
+                    progreso?.Invoke("Analizando con motor offline...");
                     return EjecutarAnalisisOffline(textoInforme, rutaPdf, empresa, resultado, modo);
                 }
 
                 // === FLUJO ONLINE ===
 
                 // PASO 5: Validar coherencia con IA
-                var validacion = await _gestorDiagnostico.ValidarCoherenciaPDF(textoInforme, empresa);
+                progreso?.Invoke("Validando coherencia del informe con la empresa...");
+                var validacion = await _gestorDiagnostico.ValidarCoherenciaPDF(textoInforme, empresa, ct);
                 resultado.MetodoValidacion = validacion.MetodoUsado;
+                ct.ThrowIfCancellationRequested();
 
                 if (!validacion.EsCoherente)
                 {
@@ -96,17 +116,37 @@ namespace MadurezTecnologica.Logica
                     return resultado;
                 }
 
-                // PASO 6: Realizar el diagnóstico con Claude (texto crudo + estructurado)
-                var (diagnostico, textoCrudo) = await _gestorDiagnostico.RealizarDiagnostico(textoInforme, empresa);
+                // PASO 6: Realizar el diagnóstico con Claude
+                progreso?.Invoke("Generando diagnóstico con la IA (esto puede tomar 30-60 segundos)...");
+                var (diagnostico, textoCrudo) = await _gestorDiagnostico.RealizarDiagnostico(textoInforme, empresa, ct);
+                ct.ThrowIfCancellationRequested();
 
                 // PASO 7: Persistir todo en la BD
-                PersistirAnalisis(empresa, rutaPdf, textoCrudo, diagnostico, resultado);
+                progreso?.Invoke("Guardando resultados...");
+                PersistirAnalisis(empresa, rutaPdf, textoInforme, textoCrudo, diagnostico, resultado);
 
                 resultado.Exitoso = true;
                 resultado.Mensaje = $"Análisis completado y guardado en BD. Validación: {validacion.Mensaje}";
                 resultado.TextoAnalisis = textoCrudo;
                 resultado.Diagnostico = diagnostico;
+
+                // Destilación progresiva de conocimiento: dispara un ciclo en background
+                // ahora que hay un dictamen IA nuevo en el corpus. Es no bloqueante y silencioso.
+                DestilacionAutomatica.DispararEnBackground();
+
                 return resultado;
+            }
+            catch (OperationCanceledException)
+            {
+                resultado.Exitoso = false;
+                resultado.Mensaje = "Análisis cancelado por el usuario.";
+                throw;
+            }
+            catch (Inteligencia.VpnRequeridaException)
+            {
+                // Bloqueo regional (VPN apagada): propagar para que la UI muestre el
+                // mensaje específico de "enciende la VPN".
+                throw;
             }
             catch (Exception ex)
             {
@@ -141,8 +181,8 @@ namespace MadurezTecnologica.Logica
             // Construir un "texto crudo" sintético para guardar como mensaje
             string textoCrudo = ConstruirTextoCrudoOffline(diagnostico, modo);
 
-            // Persistir igual que el flujo online
-            PersistirAnalisis(empresa, rutaPdf, textoCrudo, diagnostico, resultado);
+            // Persistir igual que el flujo online (incluyendo el texto real del informe)
+            PersistirAnalisis(empresa, rutaPdf, textoInforme, textoCrudo, diagnostico, resultado);
 
             resultado.Exitoso = true;
             resultado.Mensaje = modo == ModoOperacion.OfflineSinRed
@@ -274,7 +314,7 @@ namespace MadurezTecnologica.Logica
         }
 
         // Método privado que persiste todo el análisis en cascada en la BD
-        private void PersistirAnalisis(Empresa empresa, string rutaPdf, string textoCrudo, Diagnostico diagnostico, ResultadoAnalisis resultado)
+        private void PersistirAnalisis(Empresa empresa, string rutaPdf, string textoInforme, string textoCrudo, Diagnostico diagnostico, ResultadoAnalisis resultado)
         {
             // 1. Verificar si la empresa ya existe (por RIF)
             int empresaId;
@@ -300,6 +340,22 @@ namespace MadurezTecnologica.Logica
             };
             int conversacionId = _repoConversacion.Guardar(conversacion);
             resultado.ConversacionId = conversacionId;
+
+            // 2.5. Guardar el TEXTO REAL DEL INFORME como mensaje de contexto (Orden 0).
+            // No se muestra en el chat (VistaChat lo filtra), pero SÍ se envía a la IA
+            // cuando el usuario conversa online, para que Claude tenga el informe real y
+            // pueda dar un análisis genuino (evita que rechace un análisis offline genérico).
+            if (!string.IsNullOrWhiteSpace(textoInforme))
+            {
+                _repoMensaje.Guardar(new Mensaje
+                {
+                    ConversacionId = conversacionId,
+                    Remitente = "INFORME",
+                    Contenido = textoInforme,
+                    Timestamp = DateTime.Now,
+                    Orden = 0
+                });
+            }
 
             // 3. Guardar el análisis completo como primer mensaje (de la IA)
             var mensajeAnalisis = new Mensaje

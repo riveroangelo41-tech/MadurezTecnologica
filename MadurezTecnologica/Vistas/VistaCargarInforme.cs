@@ -343,14 +343,39 @@ namespace MadurezTecnologica.Vistas
 
             lblBtnAnalizar = new Label
             {
-                Text = "⚡  Analizar con IA",
-                Font = new Font("Segoe UI Emoji", 11.5f, FontStyle.Bold),
+                Text = "Analizar con IA",
+                Font = new Font("Segoe UI", 11.5f, FontStyle.Bold),
                 ForeColor = Paleta.TextoBlanco,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
-                BackColor = Color.Transparent
+                BackColor = Color.Transparent,
+                Padding = new Padding(24, 0, 0, 0)  // deja espacio para el icono a la izquierda
             };
             btnAnalizar.Controls.Add(lblBtnAnalizar);
+
+            // Icono a la izquierda del texto (nube subiendo → "enviar al análisis IA")
+            var imgAnalizar = CargadorIconos.ObtenerRedimensionado(CargadorIconos.Analizar, 22, 22);
+            if (imgAnalizar != null)
+            {
+                var picAnalizar = new PictureBox
+                {
+                    Image = imgAnalizar,
+                    Size = new Size(22, 22),
+                    SizeMode = PictureBoxSizeMode.Zoom,
+                    BackColor = Color.Transparent
+                };
+                btnAnalizar.Controls.Add(picAnalizar);
+                picAnalizar.BringToFront();
+                // Centrado vertical + colocado a la izquierda del texto centrado
+                void RecolocarPic() =>
+                    picAnalizar.Location = new Point(28, (btnAnalizar.Height - picAnalizar.Height) / 2);
+                btnAnalizar.Resize += (s, e) => RecolocarPic();
+                RecolocarPic();
+                // El clic sobre el icono también dispara el análisis
+                picAnalizar.Click += async (s, e) => await OnAnalizarClick();
+                picAnalizar.MouseEnter += (s, e) => btnAnalizar.BackColor = _btnAnalizarHabilitado ? Paleta.MoradoOscuroHover : btnAnalizar.BackColor;
+                picAnalizar.MouseLeave += (s, e) => btnAnalizar.BackColor = _btnAnalizarHabilitado ? Paleta.MoradoOscuro : btnAnalizar.BackColor;
+            }
 
             panelBotonContenedor.Controls.Add(btnAnalizar);
 
@@ -391,6 +416,20 @@ namespace MadurezTecnologica.Vistas
             EventHandler analizarClick = async (s, e) => await OnAnalizarClick();
             btnAnalizar.Click += analizarClick;
             lblBtnAnalizar.Click += analizarClick;
+
+            // Hover: solo se ilumina cuando el botón está habilitado.
+            void AplicarHoverAnalizar()
+            {
+                if (_btnAnalizarHabilitado) btnAnalizar.BackColor = Paleta.MoradoOscuroHover;
+            }
+            void QuitarHoverAnalizar()
+            {
+                if (_btnAnalizarHabilitado) btnAnalizar.BackColor = Paleta.MoradoOscuro;
+            }
+            btnAnalizar.MouseEnter += (s, e) => AplicarHoverAnalizar();
+            btnAnalizar.MouseLeave += (s, e) => QuitarHoverAnalizar();
+            lblBtnAnalizar.MouseEnter += (s, e) => AplicarHoverAnalizar();
+            lblBtnAnalizar.MouseLeave += (s, e) => QuitarHoverAnalizar();
         }
 
         // Actualiza el hint según qué falta para habilitar el análisis
@@ -490,56 +529,64 @@ namespace MadurezTecnologica.Vistas
             };
             tarjeta.Controls.Add(lblDesc);
 
-            // === ICONO WORD CON SOMBRA ===
-            var iconoWordContenedor = new Panel
+            // === ICONO WORD CON HALO CIRCULAR ===
+            // Mismo estilo visual que el icono PDF de la zona de abajo: un halo
+            // circular morado claro como marco, con el icono real centrado dentro.
+            // Así ambas tarjetas (plantilla Word y PDF cargado) tienen consistencia visual.
+            var iconoWordHalo = new Panel
             {
-                Size = new Size(110, 110),
-                Location = new Point((420 - 110) / 2, 125),
+                Size = new Size(90, 90),
+                Location = new Point((420 - 90) / 2, 135),
                 BackColor = Color.Transparent
             };
-            iconoWordContenedor.Paint += (s, e) =>
+            iconoWordHalo.Paint += (s, e) =>
             {
                 var g = e.Graphics;
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                // Sombra suave detrás del icono
-                using var brushSombra = new SolidBrush(Color.FromArgb(35, 43, 87, 154));
-                var rectSombra = new Rectangle(5, 8, 95, 95);
-                using var pathSombra = new System.Drawing.Drawing2D.GraphicsPath();
-                pathSombra.AddArc(rectSombra.X, rectSombra.Y, 28, 28, 180, 90);
-                pathSombra.AddArc(rectSombra.Right - 28, rectSombra.Y, 28, 28, 270, 90);
-                pathSombra.AddArc(rectSombra.Right - 28, rectSombra.Bottom - 28, 28, 28, 0, 90);
-                pathSombra.AddArc(rectSombra.X, rectSombra.Bottom - 28, 28, 28, 90, 90);
-                pathSombra.CloseFigure();
-                g.FillPath(brushSombra, pathSombra);
+                using var halo = new SolidBrush(Color.FromArgb(40, Paleta.MoradoClaro));
+                g.FillEllipse(halo, 0, 0, 90, 90);
             };
-            tarjeta.Controls.Add(iconoWordContenedor);
+            tarjeta.Controls.Add(iconoWordHalo);
 
-            var iconoWord = new Panel
+            // Icono real de Word (PNG embebido) centrado dentro del halo.
+            // Si el recurso falla, cae al panel azul con la "W" tradicional.
+            var imgWord = CargadorIconos.ObtenerRedimensionado(CargadorIconos.Word, 52, 52);
+            if (imgWord != null)
             {
-                Size = new Size(95, 95),
-                Location = new Point(0, 0),
-                BackColor = ColorTranslator.FromHtml("#2B579A")
-            };
-            var pathIcono = new System.Drawing.Drawing2D.GraphicsPath();
-            int rIcono = 14;
-            pathIcono.AddArc(0, 0, rIcono * 2, rIcono * 2, 180, 90);
-            pathIcono.AddArc(iconoWord.Width - rIcono * 2, 0, rIcono * 2, rIcono * 2, 270, 90);
-            pathIcono.AddArc(iconoWord.Width - rIcono * 2, iconoWord.Height - rIcono * 2, rIcono * 2, rIcono * 2, 0, 90);
-            pathIcono.AddArc(0, iconoWord.Height - rIcono * 2, rIcono * 2, rIcono * 2, 90, 90);
-            pathIcono.CloseFigure();
-            iconoWord.Region = new Region(pathIcono);
+                var picWord = new PictureBox
+                {
+                    Image = imgWord,
+                    Size = new Size(52, 52),
+                    Location = new Point((90 - 52) / 2, (90 - 52) / 2),  // centrado en el halo 90×90
+                    SizeMode = PictureBoxSizeMode.Zoom,
+                    BackColor = Color.Transparent
+                };
+                iconoWordHalo.Controls.Add(picWord);
+            }
+            else
+            {
+                var iconoWord = new Panel
+                {
+                    Size = new Size(72, 72),
+                    Location = new Point(9, 9),
+                    BackColor = ColorTranslator.FromHtml("#2B579A")
+                };
+                var pathIcono = new System.Drawing.Drawing2D.GraphicsPath();
+                pathIcono.AddEllipse(0, 0, 72, 72);
+                iconoWord.Region = new Region(pathIcono);
 
-            var lblWordLetra = new Label
-            {
-                Text = "W",
-                Font = new Font("Segoe UI", 44, FontStyle.Bold),
-                ForeColor = Color.White,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter,
-                BackColor = Color.Transparent
-            };
-            iconoWord.Controls.Add(lblWordLetra);
-            iconoWordContenedor.Controls.Add(iconoWord);
+                var lblWordLetra = new Label
+                {
+                    Text = "W",
+                    Font = new Font("Segoe UI", 32, FontStyle.Bold),
+                    ForeColor = Color.White,
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    BackColor = Color.Transparent
+                };
+                iconoWord.Controls.Add(lblWordLetra);
+                iconoWordHalo.Controls.Add(iconoWord);
+            }
 
             // === INFO BAJO EL ICONO ===
             var lblInfo = new Label
@@ -786,58 +833,70 @@ namespace MadurezTecnologica.Vistas
             };
             zona.Controls.Add(iconoPdfHalo);
 
-            var iconoPdf = new Panel
+            // Icono PDF real (PNG embebido). Se muestra centrado dentro del halo
+            // morado circular para conservar el marco de color del sistema. Si el
+            // recurso no se puede cargar, cae al dibujo custom de la hoja como antes.
+            Control iconoPdfInterno;
+            var imgPdfGrande = CargadorIconos.ObtenerRedimensionado(CargadorIconos.Pdf, 52, 52);
+            if (imgPdfGrande != null)
             {
-                Size = new Size(72, 72),
-                Location = new Point(9, 9),
-                BackColor = Paleta.MoradoClaro,
-                Cursor = Cursors.Hand
-            };
-            var pathIcono = new System.Drawing.Drawing2D.GraphicsPath();
-            pathIcono.AddEllipse(0, 0, 72, 72);
-            iconoPdf.Region = new Region(pathIcono);
-
-            // Usar Paint para dibujar el icono limpio en lugar del emoji 📄 que sobresale
-            iconoPdf.Paint += (s, e) =>
+                var picPdfGrande = new PictureBox
+                {
+                    Image = imgPdfGrande,
+                    Size = new Size(52, 52),
+                    Location = new Point((90 - 52) / 2, (90 - 52) / 2),  // centrado dentro del halo 90×90
+                    SizeMode = PictureBoxSizeMode.Zoom,
+                    BackColor = Color.Transparent,
+                    Cursor = Cursors.Hand
+                };
+                iconoPdfHalo.Controls.Add(picPdfGrande);
+                iconoPdfInterno = picPdfGrande;
+            }
+            else
             {
-                var g = e.Graphics;
-                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-
-                // Dibujar una hoja simbolizando un PDF: rectángulo con esquina doblada
-                int cx = 36, cy = 36;
-                int w = 26, h = 32;
-                int x = cx - w / 2;
-                int y = cy - h / 2;
-
-                using var brushHoja = new SolidBrush(Color.White);
-                using var penHoja = new Pen(Color.White, 2);
-
-                var hoja = new System.Drawing.Drawing2D.GraphicsPath();
-                hoja.AddLine(x, y, x + w - 8, y);
-                hoja.AddLine(x + w - 8, y, x + w, y + 8);
-                hoja.AddLine(x + w, y + 8, x + w, y + h);
-                hoja.AddLine(x + w, y + h, x, y + h);
-                hoja.CloseFigure();
-                g.FillPath(brushHoja, hoja);
-
-                // Esquina doblada
-                using var brushDoble = new SolidBrush(Color.FromArgb(170, Paleta.MoradoClaro));
-                var doble = new System.Drawing.Drawing2D.GraphicsPath();
-                doble.AddLine(x + w - 8, y, x + w - 8, y + 8);
-                doble.AddLine(x + w - 8, y + 8, x + w, y + 8);
-                doble.CloseFigure();
-                g.FillPath(brushDoble, doble);
-
-                // Líneas de texto dentro de la hoja
-                using var penLineas = new Pen(Paleta.MoradoClaro, 1.5f);
-                int xL = x + 4;
-                int wL = w - 8;
-                g.DrawLine(penLineas, xL, y + 14, xL + wL, y + 14);
-                g.DrawLine(penLineas, xL, y + 19, xL + wL, y + 19);
-                g.DrawLine(penLineas, xL, y + 24, xL + wL - 6, y + 24);
-            };
-
-            iconoPdfHalo.Controls.Add(iconoPdf);
+                // Fallback: el diseño original con hoja dibujada
+                var iconoPdf = new Panel
+                {
+                    Size = new Size(72, 72),
+                    Location = new Point(9, 9),
+                    BackColor = Paleta.MoradoClaro,
+                    Cursor = Cursors.Hand
+                };
+                var pathIcono = new System.Drawing.Drawing2D.GraphicsPath();
+                pathIcono.AddEllipse(0, 0, 72, 72);
+                iconoPdf.Region = new Region(pathIcono);
+                iconoPdf.Paint += (s, e) =>
+                {
+                    var g = e.Graphics;
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    int cx = 36, cy = 36;
+                    int w = 26, h = 32;
+                    int x = cx - w / 2;
+                    int y = cy - h / 2;
+                    using var brushHoja = new SolidBrush(Color.White);
+                    var hoja = new System.Drawing.Drawing2D.GraphicsPath();
+                    hoja.AddLine(x, y, x + w - 8, y);
+                    hoja.AddLine(x + w - 8, y, x + w, y + 8);
+                    hoja.AddLine(x + w, y + 8, x + w, y + h);
+                    hoja.AddLine(x + w, y + h, x, y + h);
+                    hoja.CloseFigure();
+                    g.FillPath(brushHoja, hoja);
+                    using var brushDoble = new SolidBrush(Color.FromArgb(170, Paleta.MoradoClaro));
+                    var doble = new System.Drawing.Drawing2D.GraphicsPath();
+                    doble.AddLine(x + w - 8, y, x + w - 8, y + 8);
+                    doble.AddLine(x + w - 8, y + 8, x + w, y + 8);
+                    doble.CloseFigure();
+                    g.FillPath(brushDoble, doble);
+                    using var penLineas = new Pen(Paleta.MoradoClaro, 1.5f);
+                    int xL = x + 4;
+                    int wL = w - 8;
+                    g.DrawLine(penLineas, xL, y + 14, xL + wL, y + 14);
+                    g.DrawLine(penLineas, xL, y + 19, xL + wL, y + 19);
+                    g.DrawLine(penLineas, xL, y + 24, xL + wL - 6, y + 24);
+                };
+                iconoPdfHalo.Controls.Add(iconoPdf);
+                iconoPdfInterno = iconoPdf;
+            }
 
             // Texto principal
             var lblTexto = new Label
@@ -931,7 +990,7 @@ namespace MadurezTecnologica.Vistas
             lblTexto.Click += clickZona;
             lblTexto2.Click += clickZona;
             iconoPdfHalo.Click += clickZona;
-            iconoPdf.Click += clickZona;
+            iconoPdfInterno.Click += clickZona;
 
             return zona;
         }
@@ -983,6 +1042,34 @@ namespace MadurezTecnologica.Vistas
                 BackColor = Color.Transparent
             };
             zona.Controls.Add(lblNombreArchivo);
+
+            // Icono PDF pequeño a la izquierda del nombre del archivo
+            var imgPdfChico = CargadorIconos.ObtenerRedimensionado(CargadorIconos.Pdf, 22, 22);
+            if (imgPdfChico != null)
+            {
+                var picPdfChico = new PictureBox
+                {
+                    Image = imgPdfChico,
+                    Size = new Size(22, 22),
+                    Location = new Point(150, 105),   // se reajusta al mostrar el nombre real
+                    SizeMode = PictureBoxSizeMode.Zoom,
+                    BackColor = Color.Transparent
+                };
+                zona.Controls.Add(picPdfChico);
+                picPdfChico.BringToFront();
+                // Reposiciona el icono a la izquierda del texto centrado del label
+                void CentrarIconoPdf()
+                {
+                    if (string.IsNullOrEmpty(lblNombreArchivo.Text)) return;
+                    var tam = TextRenderer.MeasureText(lblNombreArchivo.Text, lblNombreArchivo.Font);
+                    int xTexto = lblNombreArchivo.Left + (lblNombreArchivo.Width - tam.Width) / 2;
+                    int xIcono = xTexto - picPdfChico.Width - 8;
+                    if (xIcono < 5) xIcono = 5;
+                    picPdfChico.Location = new Point(xIcono, lblNombreArchivo.Top + 1);
+                }
+                lblNombreArchivo.TextChanged += (s, e) => CentrarIconoPdf();
+                CentrarIconoPdf();
+            }
 
             // Tamaño + páginas
             lblTamanoArchivo = new Label
@@ -1343,8 +1430,12 @@ namespace MadurezTecnologica.Vistas
         // ===================================================
         // HABILITAR / DESHABILITAR BOTÓN "ANALIZAR CON IA"
         // ===================================================
+        private bool _btnAnalizarHabilitado = false;
+
         private void HabilitarBotonAnalizar(bool habilitar)
         {
+            _btnAnalizarHabilitado = habilitar;
+
             if (habilitar)
             {
                 btnAnalizar.BackColor = Paleta.MoradoOscuro;
@@ -1391,19 +1482,28 @@ namespace MadurezTecnologica.Vistas
                 return;
             }
 
-            bool modoOfflineForzado = Inteligencia.DetectorConexion.EstarForzadoOffline();
+            // Offline efectivo: forzado por el usuario O sin conexión detectada.
+            bool modoOffline = Inteligencia.DetectorConexion.EstaOffline();
+            bool sinConexion = !Inteligencia.DetectorConexion.HayConexion;
 
             string mensajeConfirmacion;
             string tituloConfirmacion;
-            if (modoOfflineForzado)
+            if (modoOffline)
             {
+                string encabezado = sinConexion
+                    ? "⚠ SIN CONEXIÓN A INTERNET"
+                    : "⚠ MODO OFFLINE FORZADO ACTIVO";
+                string comoVolver = sinConexion
+                    ? "El análisis con IA volverá a estar disponible cuando se restablezca la conexión."
+                    : "Si quieres usar la IA, desactiva el modo offline desde el indicador del header.";
+
                 mensajeConfirmacion =
-                    $"⚠ MODO OFFLINE FORZADO ACTIVO\n\n" +
+                    $"{encabezado}\n\n" +
                     $"Se va a analizar el PDF para la empresa '{empresa.Nombre}' usando el " +
                     "MOTOR LOCAL (detección por palabras clave).\n\n" +
                     "Este motor es menos preciso que la IA. Funciona detectando palabras clave " +
                     "del informe y asignando un nivel CMMI aproximado.\n\n" +
-                    "Si quieres usar la IA, desactiva el modo offline desde el indicador del header.\n\n" +
+                    $"{comoVolver}\n\n" +
                     "¿Deseas continuar con el análisis offline?";
                 tituloConfirmacion = "Análisis con motor offline";
             }
@@ -1424,18 +1524,99 @@ namespace MadurezTecnologica.Vistas
             if (!confirmado) return;
 
             // === Bloquear UI y mostrar estado "Analizando" ===
-            lblBtnAnalizar.Text = "⏳  Analizando...";
+            lblBtnAnalizar.Text = "Analizando...";
             HabilitarBotonAnalizar(false);
-            this.Cursor = Cursors.WaitCursor;
+
+            // Mostrar diálogo de carga bloqueante con botón cancelar
+            Logica.ResultadoAnalisis? resultado = null;
+            bool cancelado = false;
+            bool vpnApagada = false;
 
             try
             {
-                // Llamar al orquestador
-                var resultado = await _orquestador.AnalizarInformePdf(_archivoSeleccionado, empresa);
+                // Ejecutar el análisis DENTRO del diálogo con progreso y cancelación
+                var dialogo = new Estilos.DialogoCargando(
+                    "Analizando informe",
+                    "Iniciando análisis del PDF...");
+
+                dialogo.Shown += async (s, e) =>
+                {
+                    try
+                    {
+                        resultado = await _orquestador.AnalizarInformePdf(
+                            _archivoSeleccionado!,
+                            empresa,
+                            dialogo.Token,
+                            mensaje => dialogo.ActualizarMensaje(mensaje));
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        cancelado = true;
+                    }
+                    catch (Inteligencia.VpnRequeridaException)
+                    {
+                        // 403 de la API = VPN apagada. Marcar y avisar tras cerrar el diálogo.
+                        vpnApagada = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        Estilos.MensajeApp.Error(
+                            $"Error inesperado durante el análisis:\n\n{ex.Message}",
+                            "Error",
+                            this.FindForm());
+                    }
+                    finally
+                    {
+                        if (!dialogo.IsDisposed) dialogo.Close();
+                    }
+                };
+
+                dialogo.ShowDialog(this.FindForm());
+                dialogo.Dispose();
+
+                // VPN apagada (403 de la API): mensaje claro pidiendo encender la VPN.
+                if (vpnApagada)
+                {
+                    Estilos.MensajeApp.Advertencia(
+                        "🔒 La VPN está apagada.\n\n" +
+                        "El análisis con IA no está disponible en tu región sin la VPN. " +
+                        "Enciéndela e intenta analizar el informe de nuevo.\n\n" +
+                        "Si no puedes usar la VPN ahora, activa el modo offline (indicador del " +
+                        "header) para analizar con el motor local.",
+                        "Se requiere VPN",
+                        this.FindForm());
+                    return;
+                }
+
+                if (cancelado || (resultado != null && resultado.Mensaje.Contains("cancelado")))
+                {
+                    // Distinguir: ¿se canceló porque se cayó la red, o porque el usuario lo canceló?
+                    if (!Inteligencia.DetectorConexion.HayConexion)
+                    {
+                        Estilos.MensajeApp.Advertencia(
+                            "Se perdió la conexión a internet durante el análisis, por lo que se canceló.\n\n" +
+                            "El sistema pasó a modo offline. Vuelve a intentar y el análisis se hará con el " +
+                            "motor local, o espera a que regrese la conexión para usar la IA.",
+                            "Conexión perdida",
+                            this.FindForm());
+                    }
+                    else
+                    {
+                        Estilos.MensajeApp.Info(
+                            "El análisis fue cancelado. No se guardó ningún resultado.",
+                            "Análisis cancelado",
+                            this.FindForm());
+                    }
+                    return;
+                }
+
+                if (resultado == null)
+                {
+                    return;   // no debería pasar pero por seguridad
+                }
 
                 if (!resultado.Exitoso)
                 {
-                    // Mostrar el mensaje del orquestador (incluye casos de "no coincide con empresa")
                     Estilos.MensajeApp.Advertencia(
                         $"El análisis no pudo completarse:\n\n{resultado.Mensaje}",
                         "Análisis no exitoso",
@@ -1443,8 +1624,16 @@ namespace MadurezTecnologica.Vistas
                     return;
                 }
 
+                // Análisis exitoso → se creó una conversación nueva. Fijar la empresa
+                // analizada como activa dispara la recarga automática del Chat (y demás
+                // vistas), de modo que la conversación quede lista para enviar mensajes.
+                if (resultado.EmpresaId.HasValue)
+                    Estado.EstadoApp.EstablecerEmpresaActiva(resultado.EmpresaId.Value);
+                Estado.EstadoApp.NotificarHistorialCambio();
+
                 // === Éxito: mostrar diagnóstico en modal ===
-                if (resultado.Diagnostico != null)
+                var diagResultado = resultado.Diagnostico;
+                if (diagResultado != null)
                 {
                     bool fueOffline = resultado.ModoUsado != Inteligencia.ModoOperacion.Online;
                     string motorUsado = fueOffline
@@ -1454,7 +1643,7 @@ namespace MadurezTecnologica.Vistas
                     string mensajeExito =
                         $"¡Análisis completado con éxito!\n\n" +
                         $"Motor utilizado: {motorUsado}\n" +
-                        $"Nivel CMMI detectado: {resultado.Diagnostico.NivelMadurez}\n" +
+                        $"Nivel CMMI detectado: {diagResultado.NivelMadurez}\n" +
                         $"Caracteres procesados: {resultado.CaracteresProcesados:N0}\n" +
                         $"Validación: {resultado.MetodoValidacion}\n\n" +
                         "El diagnóstico se ha guardado en la base de datos.\n" +
@@ -1470,13 +1659,18 @@ namespace MadurezTecnologica.Vistas
                         : "Análisis exitoso";
 
                     Estilos.MensajeApp.Exito(mensajeExito, titulo, this.FindForm());
-
-                    // Mostrar modal con el diagnóstico completo (mismo diseño que VistaHistorial y VistaChat)
-                    MostrarModalDiagnostico(resultado.Diagnostico);
+                    MostrarModalDiagnostico(diagResultado);
                 }
 
-                // Limpiar archivo cargado (ya se analizó esta empresa, no se puede analizar de nuevo)
                 QuitarArchivo();
+            }
+            catch (OperationCanceledException)
+            {
+                cancelado = true;
+                Estilos.MensajeApp.Info(
+                    "El análisis fue cancelado. No se guardó ningún resultado.",
+                    "Análisis cancelado",
+                    this.FindForm());
             }
             catch (Exception ex)
             {
@@ -1488,7 +1682,7 @@ namespace MadurezTecnologica.Vistas
             finally
             {
                 // Restaurar UI
-                lblBtnAnalizar.Text = "⚡  Analizar con IA";
+                lblBtnAnalizar.Text = "Analizar con IA";
                 HabilitarBotonAnalizar(_archivoSeleccionado != null);
                 this.Cursor = Cursors.Default;
             }

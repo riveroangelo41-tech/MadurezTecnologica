@@ -19,9 +19,12 @@
         public string Recomendaciones { get; set; } = "";
 
         public DateTime FechaGeneracion { get; set; }
-        
+
         public bool EsFinal { get; set; }
 
-
+        // Origen del dictamen: "IA" (Claude) u "OFFLINE" (MotorOffline).
+        // El Destilador solo aprende de dictámenes con Origen="IA" para evitar
+        // que el motor offline se retroalimente de sus propios outputs (loop degradante).
+        public string Origen { get; set; } = "IA";
     }
 }

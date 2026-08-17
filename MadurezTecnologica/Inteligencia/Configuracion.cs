@@ -8,15 +8,36 @@ namespace MadurezTecnologica.Inteligencia
 
         private static IConfiguration ObtenerConfig() //metodo para cargar la configuracion
         {
-            // Si ya se cargó la configuración, la devuelve. Si no, la carga desde el archivo appconfi.json
-            if (_config == null)
+            if (_config != null) return _config;
+
+            var builder = new ConfigurationBuilder();
+            string rutaArchivo = System.IO.Path.Combine(AppContext.BaseDirectory, "appconfi.json");
+
+            if (System.IO.File.Exists(rutaArchivo))
             {
-                // codigo para cargar la configuración paso a paso:contrius, buscar archivo, cargarlo y devolver el resultado
-                _config = new ConfigurationBuilder()
-                    .SetBasePath(AppContext.BaseDirectory)
-                    .AddJsonFile("appconfi.json", optional: false)
-                    .Build();
+                // Modo normal (desarrollo o publish con archivo al lado): leer del archivo.
+                // Permite además sobreescribir la config sin recompilar.
+                builder.AddJsonFile(rutaArchivo, optional: false);
+                _config = builder.Build();
             }
+            else
+            {
+                // Modo single-file (.exe solo): leer la config del RECURSO EMBEBIDO.
+                var asm = System.Reflection.Assembly.GetExecutingAssembly();
+                string? nombreRecurso = asm.GetManifestResourceNames()
+                    .FirstOrDefault(n => n.EndsWith("appconfi.json", StringComparison.OrdinalIgnoreCase));
+
+                if (nombreRecurso == null)
+                    throw new Exception("No se encontró la configuración (appconfi.json) ni como archivo ni embebida en el ejecutable.");
+
+                using var stream = asm.GetManifestResourceStream(nombreRecurso)!;
+                using var ms = new System.IO.MemoryStream();
+                stream.CopyTo(ms);
+                ms.Position = 0;
+                builder.AddJsonStream(ms);
+                _config = builder.Build();   // se construye mientras el stream sigue vivo
+            }
+
             return _config;
         }
 
@@ -49,6 +70,20 @@ namespace MadurezTecnologica.Inteligencia
                 var valor = ObtenerConfig()["Anthropic:MaxTokens"];
                 return int.TryParse(valor, out int n) ? n : 4000;
             }
+        }
+
+        // === AUTENTICACIÓN (RF-33) ===
+        // Credenciales almacenadas en appconfi.json. La contraseña se guarda como
+        // hash SHA-256 (nunca en texto plano).
+
+        public static string UsuarioAutenticacion
+        {
+            get => ObtenerConfig()["Autenticacion:Usuario"] ?? "";
+        }
+
+        public static string PasswordHashAutenticacion
+        {
+            get => ObtenerConfig()["Autenticacion:PasswordHash"] ?? "";
         }
     }
 }
