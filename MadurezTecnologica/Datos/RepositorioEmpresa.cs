@@ -90,9 +90,17 @@ namespace MadurezTecnologica.Datos
             using var conexion = new SqliteConnection(BaseDatos.CadenaConexion);
             conexion.Open();
 
+            // Búsqueda NORMALIZADA: quita guiones y espacios de ambos lados y
+            // compara en mayúsculas. Esto hace que "J-12345678-9" y "J123456789"
+            // se consideren el mismo RIF (el SENIAT ya no exige guiones, así
+            // que dos usuarios podrían tipearlo distinto para la misma empresa).
+            // Se aplica solo a la comparación — no muta el valor guardado.
             var cmd = conexion.CreateCommand();
-            cmd.CommandText = "SELECT * FROM Empresas WHERE Rif = $rif";
-            cmd.Parameters.AddWithValue("$rif", rif);
+            cmd.CommandText = @"
+                SELECT * FROM Empresas
+                WHERE UPPER(REPLACE(REPLACE(Rif, '-', ''), ' ', ''))
+                    = UPPER(REPLACE(REPLACE($rif, '-', ''), ' ', ''))";
+            cmd.Parameters.AddWithValue("$rif", rif ?? "");
 
             using var reader = cmd.ExecuteReader();
             if (reader.Read())

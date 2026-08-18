@@ -135,6 +135,66 @@ Responde EXCLUSIVAMENTE con una sola palabra, sin explicaciones ni puntuación a
 - NO (si el texto corresponde a una empresa diferente, o no es un informe empresarial)";
         }
 
+        // Prompt para validar si el sector del informe corresponde al sector registrado
+        // de la empresa. Se usa como capa adicional de coherencia (RF derivado de
+        // la corrección del tutor: no aceptar informes cuyo sector no encaja con lo
+        // que el usuario registró). Distinto de PromptValidacionCoherencia, que solo
+        // valida nombre; este valida ENCAJE TEMÁTICO del contenido con el sector.
+        public string PromptValidacionSector(string textoInforme, string sectorRegistrado)
+        {
+            string textoRecortado = textoInforme.Length > 2500
+                ? textoInforme.Substring(0, 2500) + "..."
+                : textoInforme;
 
+            return $@"Analiza el siguiente fragmento de un informe empresarial y determina si el TEMA del informe corresponde al sector indicado.
+
+SECTOR REGISTRADO POR EL USUARIO: {sectorRegistrado}
+
+FRAGMENTO DEL INFORME:
+---
+{textoRecortado}
+---
+
+Criterio de evaluación:
+- Responde SI si el informe habla claramente de una empresa que opera en el sector registrado, o si el sector registrado es lo suficientemente cercano al tema del informe como para no ser una inconsistencia grave.
+- Responde NO solo si hay una inconsistencia CLARA entre el sector registrado y el contenido del informe (por ejemplo: sector 'Videojuegos' pero el informe habla exclusivamente de un ERP corporativo, o sector 'HealthTech' pero el informe describe una tienda de ropa).
+- Sé tolerante: la mayoría de las empresas de software tienen actividades transversales (usan ERPs, tienen sitios web, aplican ciberseguridad). Marca inconsistencia solo si es evidente.
+
+Si respondes NO, agrega en una segunda línea el sector que SÍ describe el informe, en formato:
+NO
+Sector detectado: [nombre del sector]
+
+Si respondes SI, responde SOLO la palabra SI, sin nada más.";
+        }
+
+        // Prompt para detectar cuántos empleados menciona el informe. Se usa para
+        // comparar con el número registrado en la empresa y detectar inconsistencias.
+        // Se le pide a Claude que devuelva SOLO el número (o -1 si no lo puede
+        // determinar con confianza), para parseo fácil.
+        public string PromptDetectarEmpleados(string textoInforme)
+        {
+            string textoRecortado = textoInforme.Length > 3000
+                ? textoInforme.Substring(0, 3000) + "..."
+                : textoInforme;
+
+            return $@"Lee el siguiente fragmento de un informe empresarial y determina cuántos empleados tiene la empresa según el informe.
+
+FRAGMENTO DEL INFORME:
+---
+{textoRecortado}
+---
+
+Instrucciones estrictas:
+- Busca menciones explícitas al número de empleados, trabajadores, personal, planta, plantilla, colaboradores o equipo.
+- Si el informe menciona un rango (por ejemplo ""entre 20 y 30 empleados""), responde con el promedio redondeado.
+- Ignora otros números que NO se refieran a empleados (años en el mercado, número de oficinas, número de clientes, etc.).
+- Responde EXCLUSIVAMENTE con el número entero, sin explicaciones, sin puntuación, sin texto adicional.
+- Si NO puedes determinar con confianza el número de empleados, responde exactamente: -1
+
+Ejemplos de respuesta válida:
+50
+120
+-1";
+        }
     }
 }

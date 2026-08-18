@@ -1531,9 +1531,22 @@ namespace MadurezTecnologica.Vistas
             Logica.ResultadoAnalisis? resultado = null;
             bool cancelado = false;
             bool vpnApagada = false;
+            // Cuando el análisis detecta inconsistencias (sector, RIF o empleados),
+            // devuelve el flag correspondiente. Preguntamos al usuario si quiere
+            // continuar; si dice sí, re-lanzamos el análisis con esa validación
+            // ignorada. Cada validación tiene su propia flag independiente.
+            bool ignorarValidacionSector = false;
+            bool ignorarValidacionRif = false;
+            bool ignorarValidacionEmpleados = false;
 
             try
             {
+                REINTENTAR_ANALISIS:
+                // reset por si venimos de un reintento
+                resultado = null;
+                cancelado = false;
+                vpnApagada = false;
+
                 // Ejecutar el análisis DENTRO del diálogo con progreso y cancelación
                 var dialogo = new Estilos.DialogoCargando(
                     "Analizando informe",
@@ -1547,7 +1560,10 @@ namespace MadurezTecnologica.Vistas
                             _archivoSeleccionado!,
                             empresa,
                             dialogo.Token,
-                            mensaje => dialogo.ActualizarMensaje(mensaje));
+                            mensaje => dialogo.ActualizarMensaje(mensaje),
+                            ignorarValidacionSector,
+                            ignorarValidacionRif,
+                            ignorarValidacionEmpleados);
                     }
                     catch (OperationCanceledException)
                     {
@@ -1586,6 +1602,107 @@ namespace MadurezTecnologica.Vistas
                         "Se requiere VPN",
                         this.FindForm());
                     return;
+                }
+
+                // === INCONSISTENCIA DE SECTOR ===
+                // El sector del PDF no coincide con el sector registrado de la empresa.
+                // Preguntamos si quiere continuar de todos modos; si dice sí, se re-lanza
+                // el análisis con la validación de sector ignorada.
+                if (resultado != null && resultado.RequiereConfirmacionSector)
+                {
+                    string detalle = string.IsNullOrWhiteSpace(resultado.SectorDetectado)
+                        ? $"La empresa está registrada como \"{resultado.SectorRegistrado}\", pero el contenido del PDF no encaja con ese sector."
+                        : $"La empresa está registrada como \"{resultado.SectorRegistrado}\", pero el contenido del PDF parece corresponder al sector \"{resultado.SectorDetectado}\".";
+
+                    string mensajeInconsistencia =
+                        "⚠️  Se detectó una posible inconsistencia entre el sector registrado y el contenido del informe.\n\n" +
+                        detalle + "\n\n" +
+                        "Recomendación: sube el PDF correcto de esta empresa, o edita la empresa para corregir el sector.\n\n" +
+                        "¿Deseas continuar con el análisis de todos modos?";
+
+                    bool continuarIgual = Estilos.MensajeApp.Confirmar(
+                        mensajeInconsistencia,
+                        "Sector inconsistente",
+                        this.FindForm());
+
+                    if (continuarIgual)
+                    {
+                        // Volver a lanzar el análisis ignorando la validación de sector
+                        ignorarValidacionSector = true;
+                        goto REINTENTAR_ANALISIS;
+                    }
+                    else
+                    {
+                        // El usuario decidió no continuar → salir sin analizar
+                        return;
+                    }
+                }
+
+                // === INCONSISTENCIA DE RIF ===
+                // El RIF registrado no aparece en el PDF. Es la validación más
+                // estricta (el RIF es único e inequívoco), así que el mensaje es
+                // más contundente que el de sector.
+                if (resultado != null && resultado.RequiereConfirmacionRif)
+                {
+                    string mensajeRif =
+                        "⚠️  El RIF de la empresa no aparece en el informe.\n\n" +
+                        $"La empresa está registrada con RIF: {resultado.RifRegistrado}\n\n" +
+                        "El RIF es un identificador único de la empresa. Si no aparece en el PDF, " +
+                        "es posible que el informe corresponda a OTRA empresa.\n\n" +
+                        "Recomendación: verifica que el PDF sea el correcto para esta empresa, " +
+                        "o edita la empresa para corregir el RIF.\n\n" +
+                        "¿Deseas continuar con el análisis de todos modos?";
+
+                    bool continuarIgual = Estilos.MensajeApp.Confirmar(
+                        mensajeRif,
+                        "RIF no encontrado en el informe",
+                        this.FindForm());
+
+                    if (continuarIgual)
+                    {
+                        ignorarValidacionRif = true;
+                        goto REINTENTAR_ANALISIS;
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+
+                // === INCONSISTENCIA DE CANTIDAD DE EMPLEADOS ===
+                // El número de empleados del informe difiere más del 20% del registrado.
+                // Es la más "suave" de las tres advertencias — las empresas cambian de
+                // tamaño con el tiempo, así que puede ser legítimo simplemente actualizar.
+                if (resultado != null && resultado.RequiereConfirmacionEmpleados)
+                {
+                    int diff = Math.Abs(resultado.EmpleadosDetectados - resultado.EmpleadosRegistrados);
+                    double pct = resultado.EmpleadosRegistrados > 0
+                        ? Math.Round(diff * 100.0 / resultado.EmpleadosRegistrados, 1)
+                        : 0;
+
+                    string mensajeEmp =
+                        "⚠️  La cantidad de empleados no coincide con lo registrado.\n\n" +
+                        $"Empresa registrada con:  {resultado.EmpleadosRegistrados} empleados\n" +
+                        $"Informe menciona:         ~{resultado.EmpleadosDetectados} empleados\n" +
+                        $"Diferencia:               {pct}%\n\n" +
+                        "Puede ser que la empresa haya crecido o reducido su plantilla desde el " +
+                        "último registro. Verifica y, si corresponde, edita la empresa para actualizar el dato.\n\n" +
+                        "¿Deseas continuar con el análisis de todos modos?";
+
+                    bool continuarIgual = Estilos.MensajeApp.Confirmar(
+                        mensajeEmp,
+                        "Cantidad de empleados inconsistente",
+                        this.FindForm());
+
+                    if (continuarIgual)
+                    {
+                        ignorarValidacionEmpleados = true;
+                        goto REINTENTAR_ANALISIS;
+                    }
+                    else
+                    {
+                        return;
+                    }
                 }
 
                 if (cancelado || (resultado != null && resultado.Mensaje.Contains("cancelado")))

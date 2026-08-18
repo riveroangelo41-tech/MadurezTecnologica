@@ -384,16 +384,48 @@ namespace MadurezTecnologica.Logica
             rInicial.FontSize = 10;
             rInicial.FontFamily = "Calibri";
 
-            // Resto de las filas
+            // ORDEN: primero los campos que TAMBIÉN están en el formulario de registro
+            // del sistema (para que la validación de coherencia funcione correctamente),
+            // y luego los campos adicionales de la plantilla.
+            // El "Sector" NO va en la tabla sino como sub-sección aparte con lista de
+            // opciones para marcar — así se garantiza consistencia con el desplegable
+            // del formulario y la IA lo puede detectar sin ambigüedad.
             AgregarFilaDato(tabla, "RIF:");
+            AgregarFilaDato(tabla, "Cantidad de empleados:");
+            AgregarFilaDato(tabla, "Teléfono:");
+            AgregarFilaDato(tabla, "Dirección:");
             AgregarFilaDato(tabla, "Año de fundación:");
             AgregarFilaDato(tabla, "Sede principal (ciudad, país):");
             AgregarFilaDato(tabla, "Sucursales o sedes adicionales:");
-            AgregarFilaDato(tabla, "Cantidad total de empleados:");
-            AgregarFilaDato(tabla, "Empleados en desarrollo de software:");
             AgregarFilaDato(tabla, "Facturación anual aproximada (USD):");
             AgregarFilaDato(tabla, "Sitio web:");
             AgregarFilaDato(tabla, "Correo de contacto:");
+
+            // Sub-sección 1.1: Sector con lista cerrada de opciones (17 sectores +
+            // "Otro" para especificar). Debe coincidir 1:1 con el desplegable del
+            // FormNuevaEmpresa para que la validación de coherencia sea confiable.
+            AgregarEspacio(doc);
+            AgregarPregunta(doc, "1.1 Sector / Rubro (marque el que corresponde a su empresa)");
+            AgregarHint(doc, "Debe coincidir con el sector registrado en el sistema. Marque UNO solo.");
+
+            AgregarBullet(doc, "(  ) Desarrollo de software a la medida");
+            AgregarBullet(doc, "(  ) Desarrollo web / aplicaciones web");
+            AgregarBullet(doc, "(  ) Desarrollo móvil (iOS / Android)");
+            AgregarBullet(doc, "(  ) Fintech / Software financiero");
+            AgregarBullet(doc, "(  ) E-commerce / Comercio electrónico");
+            AgregarBullet(doc, "(  ) EdTech / Software educativo");
+            AgregarBullet(doc, "(  ) HealthTech / Software para salud");
+            AgregarBullet(doc, "(  ) Videojuegos");
+            AgregarBullet(doc, "(  ) Software empresarial (ERP, CRM)");
+            AgregarBullet(doc, "(  ) Servicios en la nube / SaaS");
+            AgregarBullet(doc, "(  ) Ciberseguridad");
+            AgregarBullet(doc, "(  ) Inteligencia artificial / Machine learning");
+            AgregarBullet(doc, "(  ) Data / Analytics / Big Data");
+            AgregarBullet(doc, "(  ) DevOps / Infraestructura");
+            AgregarBullet(doc, "(  ) Software embebido / IoT");
+            AgregarBullet(doc, "(  ) Consultoría / Servicios TI");
+            AgregarBullet(doc, "(  ) Otro (especifique):");
+            AgregarCajaRespuesta(doc, 2);
         }
 
         private void AgregarSeccion2(XWPFDocument doc)
@@ -463,7 +495,7 @@ namespace MadurezTecnologica.Logica
             AgregarCajaRespuesta(doc, 3);
 
             AgregarPregunta(doc, "4.2 Metodología de desarrollo");
-            AgregarHint(doc, "¿Usan Scrum, Kanban, cascada, híbrido, ad-hoc? ¿Está formalmente documentada o es informal?");
+            AgregarHint(doc, "¿Usan Kanban, cascada, híbrido, ad-hoc? ¿Está formalmente documentada o es informal?");
             AgregarCajaRespuesta(doc, 3);
 
             AgregarPregunta(doc, "4.3 Convenciones de código y revisiones (code review)");

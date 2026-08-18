@@ -20,6 +20,24 @@ namespace MadurezTecnologica.Logica
         public int? EmpresaId { get; set; }
         public int? ConversacionId { get; set; }
         public int? DiagnosticoId { get; set; }
+
+        // Advertencia de inconsistencia de sector detectada por la IA (o keywords en
+        // offline). Cuando RequiereConfirmacionSector=true, el análisis NO se ejecutó
+        // ni se persistió; la vista debe mostrar el mensaje y preguntar al usuario si
+        // quiere continuar. Si acepta, se vuelve a llamar con ignorarValidacionSector=true.
+        public bool RequiereConfirmacionSector { get; set; }
+        public string SectorRegistrado { get; set; } = "";
+        public string SectorDetectado { get; set; } = "";
+
+        // Advertencia de inconsistencia de RIF: el RIF registrado no aparece en el PDF.
+        public bool RequiereConfirmacionRif { get; set; }
+        public string RifRegistrado { get; set; } = "";
+
+        // Advertencia de inconsistencia en cantidad de empleados: el número del PDF
+        // difiere del registrado en más del margen permitido (20%).
+        public bool RequiereConfirmacionEmpleados { get; set; }
+        public int EmpleadosRegistrados { get; set; }
+        public int EmpleadosDetectados { get; set; }
     }
 
     public class OrquestadorAnalisis
@@ -49,7 +67,10 @@ namespace MadurezTecnologica.Logica
             string rutaPdf,
             Empresa empresa,
             CancellationToken ct = default,
-            Action<string>? progreso = null)
+            Action<string>? progreso = null,
+            bool ignorarValidacionSector = false,
+            bool ignorarValidacionRif = false,
+            bool ignorarValidacionEmpleados = false)
         {
             var resultado = new ResultadoAnalisis
             {
@@ -98,7 +119,8 @@ namespace MadurezTecnologica.Logica
                 if (modo != ModoOperacion.Online)
                 {
                     progreso?.Invoke("Analizando con motor offline...");
-                    return EjecutarAnalisisOffline(textoInforme, rutaPdf, empresa, resultado, modo);
+                    return EjecutarAnalisisOffline(textoInforme, rutaPdf, empresa, resultado, modo,
+                        ignorarValidacionSector, ignorarValidacionRif);
                 }
 
                 // === FLUJO ONLINE ===
@@ -114,6 +136,64 @@ namespace MadurezTecnologica.Logica
                     resultado.Exitoso = false;
                     resultado.Mensaje = $"El informe no corresponde a la empresa registrada ({empresa.Nombre}). {validacion.Mensaje}";
                     return resultado;
+                }
+
+                // PASO 5.5: Validar que el SECTOR del informe corresponda al sector
+                // registrado. Es una capa adicional sobre la validación de nombre
+                // (RF derivado de corrección del tutor). Se salta si el usuario ya
+                // confirmó en un diálogo previo que quiere continuar a pesar de la advertencia.
+                if (!ignorarValidacionSector && !string.IsNullOrWhiteSpace(empresa.Sector))
+                {
+                    progreso?.Invoke("Verificando coherencia del sector...");
+                    var (sectorOk, sectorDetectado) = await _gestorDiagnostico.ValidarSectorPDF(textoInforme, empresa, ct);
+                    ct.ThrowIfCancellationRequested();
+
+                    if (!sectorOk)
+                    {
+                        resultado.Exitoso = false;
+                        resultado.RequiereConfirmacionSector = true;
+                        resultado.SectorRegistrado = empresa.Sector;
+                        resultado.SectorDetectado = sectorDetectado;
+                        resultado.Mensaje = string.IsNullOrWhiteSpace(sectorDetectado)
+                            ? $"El contenido del informe no coincide con el sector registrado ({empresa.Sector})."
+                            : $"El informe parece corresponder al sector \"{sectorDetectado}\", pero la empresa está registrada como \"{empresa.Sector}\".";
+                        return resultado;
+                    }
+                }
+
+                // PASO 5.6: Validar que el RIF registrado aparezca en el PDF. Es una
+                // validación estricta (offline+online) porque el RIF es un dato único
+                // e inequívoco. Se salta si el usuario ya confirmó continuar.
+                if (!ignorarValidacionRif && !string.IsNullOrWhiteSpace(empresa.Rif))
+                {
+                    progreso?.Invoke("Verificando el RIF...");
+                    if (!TextoContieneRif(textoInforme, empresa.Rif))
+                    {
+                        resultado.Exitoso = false;
+                        resultado.RequiereConfirmacionRif = true;
+                        resultado.RifRegistrado = empresa.Rif;
+                        resultado.Mensaje = $"El RIF de la empresa ({empresa.Rif}) no aparece en el informe.";
+                        return resultado;
+                    }
+                }
+
+                // PASO 5.7: Validar la cantidad de empleados. Solo online (offline no
+                // hay forma confiable de detectarlo). Margen de tolerancia del 20%.
+                if (!ignorarValidacionEmpleados && empresa.CantidadEmpleados > 0)
+                {
+                    progreso?.Invoke("Verificando cantidad de empleados...");
+                    int empleadosDetectados = await _gestorDiagnostico.DetectarEmpleadosPDF(textoInforme, ct);
+                    ct.ThrowIfCancellationRequested();
+
+                    if (empleadosDetectados > 0 && !EmpleadosDentroDelMargen(empresa.CantidadEmpleados, empleadosDetectados, 0.20))
+                    {
+                        resultado.Exitoso = false;
+                        resultado.RequiereConfirmacionEmpleados = true;
+                        resultado.EmpleadosRegistrados = empresa.CantidadEmpleados;
+                        resultado.EmpleadosDetectados = empleadosDetectados;
+                        resultado.Mensaje = $"El informe menciona aproximadamente {empleadosDetectados} empleados, pero la empresa está registrada con {empresa.CantidadEmpleados}.";
+                        return resultado;
+                    }
                 }
 
                 // PASO 6: Realizar el diagnóstico con Claude
@@ -161,7 +241,9 @@ namespace MadurezTecnologica.Logica
         // ===================================================
         private ResultadoAnalisis EjecutarAnalisisOffline(
             string textoInforme, string rutaPdf, Empresa empresa,
-            ResultadoAnalisis resultado, ModoOperacion modo)
+            ResultadoAnalisis resultado, ModoOperacion modo,
+            bool ignorarValidacionSector,
+            bool ignorarValidacionRif)
         {
             // Validación local de coherencia (sin IA): buscar referencias a la empresa
             var validacionOffline = ValidarCoherenciaOffline(textoInforme, empresa);
@@ -173,6 +255,38 @@ namespace MadurezTecnologica.Logica
                 resultado.Mensaje = $"El informe no parece corresponder a la empresa registrada ({empresa.Nombre}). " +
                                     $"{validacionOffline.Mensaje}";
                 return resultado;
+            }
+
+            // Validación de sector por keywords (equivalente offline de la validación
+            // de sector online con IA). Se salta si el usuario ya confirmó continuar.
+            if (!ignorarValidacionSector && !string.IsNullOrWhiteSpace(empresa.Sector))
+            {
+                var (sectorOk, sectorDetectado) = ValidarSectorOffline(textoInforme, empresa.Sector);
+                if (!sectorOk)
+                {
+                    resultado.Exitoso = false;
+                    resultado.RequiereConfirmacionSector = true;
+                    resultado.SectorRegistrado = empresa.Sector;
+                    resultado.SectorDetectado = sectorDetectado ?? "";
+                    resultado.Mensaje = string.IsNullOrWhiteSpace(sectorDetectado)
+                        ? $"El contenido del informe no coincide con el sector registrado ({empresa.Sector})."
+                        : $"El informe parece corresponder al sector \"{sectorDetectado}\", pero la empresa está registrada como \"{empresa.Sector}\".";
+                    return resultado;
+                }
+            }
+
+            // Validación estricta del RIF también en offline (búsqueda literal + variaciones).
+            // Empleados NO se valida en offline por falta de forma confiable de detectarlo.
+            if (!ignorarValidacionRif && !string.IsNullOrWhiteSpace(empresa.Rif))
+            {
+                if (!TextoContieneRif(textoInforme, empresa.Rif))
+                {
+                    resultado.Exitoso = false;
+                    resultado.RequiereConfirmacionRif = true;
+                    resultado.RifRegistrado = empresa.Rif;
+                    resultado.Mensaje = $"El RIF de la empresa ({empresa.Rif}) no aparece en el informe.";
+                    return resultado;
+                }
             }
 
             // Ejecutar motor offline
@@ -374,6 +488,132 @@ namespace MadurezTecnologica.Logica
             resultado.DiagnosticoId = diagnosticoId;
 
             resultado.PersistidoEnBD = true;
+        }
+
+        // ===================================================
+        // VALIDACIÓN DE SECTOR OFFLINE (por palabras clave)
+        // ===================================================
+        // Diccionario: sector registrado → palabras clave características.
+        // Se usa cuando NO hay conexión (no podemos preguntar a la IA).
+        // La estrategia: contar cuántas keywords aparecen del sector REGISTRADO vs.
+        // cuántas aparecen de cada OTRO sector. Si otro sector tiene sustancialmente
+        // más matches, se marca como inconsistencia.
+        private static readonly Dictionary<string, string[]> KEYWORDS_SECTOR =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Desarrollo de software a la medida"] = new[] { "software a la medida", "desarrollo a medida", "fábrica de software", "outsourcing de desarrollo" },
+                ["Desarrollo web / aplicaciones web"]  = new[] { "aplicación web", "sitio web", "html", "css", "javascript", "react", "angular", "vue", "frontend", "backend web" },
+                ["Desarrollo móvil (iOS / Android)"]   = new[] { "app móvil", "aplicación móvil", "android", "ios", "swift", "kotlin", "react native", "flutter" },
+                ["Fintech / Software financiero"]       = new[] { "fintech", "financiero", "bancario", "pagos", "transacciones", "billetera", "wallet" },
+                ["E-commerce / Comercio electrónico"]  = new[] { "e-commerce", "ecommerce", "comercio electrónico", "tienda online", "carrito de compras", "checkout" },
+                ["EdTech / Software educativo"]         = new[] { "edtech", "educativo", "educación", "estudiante", "aprendizaje", "e-learning", "curso online", "lms" },
+                ["HealthTech / Software para salud"]   = new[] { "healthtech", "salud", "médico", "paciente", "clínico", "hospital", "historia clínica", "telemedicina" },
+                ["Videojuegos"]                         = new[] { "videojuego", "videojuegos", "gameplay", "unity", "unreal engine", "gaming", "juego móvil" },
+                ["Software empresarial (ERP, CRM)"]    = new[] { "erp", "crm", "gestión empresarial", "workflow", "sap", "oracle ebs", "planificación de recursos" },
+                ["Servicios en la nube / SaaS"]        = new[] { "saas", "software as a service", "servicios en la nube", "aws", "azure", "gcp", "iaas", "paas" },
+                ["Ciberseguridad"]                      = new[] { "ciberseguridad", "seguridad informática", "pentesting", "vulnerabilidad", "cifrado", "iso 27001", "soc" },
+                ["Inteligencia artificial / Machine learning"] = new[] { "inteligencia artificial", "machine learning", "deep learning", "modelo predictivo", "redes neuronales", "nlp" },
+                ["Data / Analytics / Big Data"]        = new[] { "big data", "analytics", "análisis de datos", "data warehouse", "business intelligence", "power bi", "tableau", "etl" },
+                ["DevOps / Infraestructura"]           = new[] { "devops", "kubernetes", "docker", "ci/cd", "pipeline de despliegue", "terraform", "ansible", "infraestructura como código" },
+                ["Software embebido / IoT"]            = new[] { "iot", "internet of things", "embebido", "firmware", "microcontrolador", "sensores", "arduino", "raspberry" },
+                ["Consultoría / Servicios TI"]         = new[] { "consultoría", "asesoría en ti", "servicios profesionales de ti" }
+            };
+
+        // Valida por keywords si el sector del texto encaja con el sector registrado.
+        // Devuelve (esCoherente, sectorDetectado).
+        private (bool esCoherente, string sectorDetectado) ValidarSectorOffline(string texto, string sectorRegistrado)
+        {
+            string textoLower = (texto ?? "").ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(sectorRegistrado)) return (true, "");
+
+            // "Otro" o sector fuera del diccionario: no podemos validar → aceptamos.
+            if (!KEYWORDS_SECTOR.ContainsKey(sectorRegistrado)) return (true, "");
+
+            // Contar matches por sector
+            var matches = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (sector, kws) in KEYWORDS_SECTOR)
+            {
+                int n = 0;
+                foreach (var kw in kws)
+                {
+                    if (textoLower.Contains(kw.ToLowerInvariant())) n++;
+                }
+                matches[sector] = n;
+            }
+
+            int matchesRegistrado = matches[sectorRegistrado];
+
+            // Buscar el sector con más matches
+            string sectorGanador = sectorRegistrado;
+            int matchesGanador = matchesRegistrado;
+            foreach (var (sector, n) in matches)
+            {
+                if (n > matchesGanador)
+                {
+                    sectorGanador = sector;
+                    matchesGanador = n;
+                }
+            }
+
+            // Criterio de inconsistencia: el sector registrado tiene 0 matches Y otro
+            // sector tiene al menos 2 matches. Ser tolerante para no rechazar informes
+            // válidos (una empresa Fintech puede mencionar "erp" una vez sin ser ERP).
+            if (matchesRegistrado == 0 && matchesGanador >= 2)
+                return (false, sectorGanador);
+
+            return (true, "");
+        }
+
+        // ===================================================
+        // VALIDACIÓN DE RIF (búsqueda estricta en el texto)
+        // ===================================================
+        // Busca el RIF registrado en el texto del PDF admitiendo variaciones comunes:
+        //  - Como fue escrito: "J-12345678-9"
+        //  - Sin guiones: "J123456789"
+        //  - Sin prefijo de letra: "12345678-9"
+        //  - Solo los dígitos: "123456789"
+        // Es más robusto que buscar solo la forma literal, sin ser tan tolerante como
+        // para dar falsos positivos.
+        private static bool TextoContieneRif(string texto, string rif)
+        {
+            if (string.IsNullOrWhiteSpace(texto) || string.IsNullOrWhiteSpace(rif))
+                return false;
+
+            string textoLower = texto.ToLowerInvariant();
+            string rifLower = rif.ToLowerInvariant().Trim();
+
+            // 1. Forma literal
+            if (textoLower.Contains(rifLower)) return true;
+
+            // 2. Sin guiones ni espacios ("J123456789")
+            string rifSinSeparadores = System.Text.RegularExpressions.Regex.Replace(rifLower, @"[\s\-]", "");
+            string textoSinSeparadores = System.Text.RegularExpressions.Regex.Replace(textoLower, @"[\s\-]", "");
+            if (textoSinSeparadores.Contains(rifSinSeparadores)) return true;
+
+            // 3. Solo la parte numérica ("123456789") — 8 o 9 dígitos consecutivos
+            var soloDigitos = System.Text.RegularExpressions.Regex.Match(rifLower, @"\d{7,10}");
+            if (soloDigitos.Success)
+            {
+                string num = soloDigitos.Value;
+                if (textoSinSeparadores.Contains(num)) return true;
+                if (textoLower.Contains(num)) return true;
+            }
+
+            return false;
+        }
+
+        // ===================================================
+        // VALIDACIÓN DE EMPLEADOS (margen porcentual)
+        // ===================================================
+        // Devuelve true si el número detectado está DENTRO del margen permitido
+        // respecto al registrado. Ejemplo: registrado=50, margen=0.20 → rango [40, 60].
+        // Si el número detectado es 0 o negativo, se considera "no detectable" → true
+        // (no bloquea). El caller decide si preguntar o no según empleadosDetectados > 0.
+        private static bool EmpleadosDentroDelMargen(int registrados, int detectados, double margen)
+        {
+            if (registrados <= 0 || detectados <= 0) return true;
+            double diff = Math.Abs(detectados - registrados) / (double)registrados;
+            return diff <= margen;
         }
     }
 }

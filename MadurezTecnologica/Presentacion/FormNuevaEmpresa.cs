@@ -18,10 +18,37 @@ namespace MadurezTecnologica.Presentacion
         // Campos del formulario
         private TextBox txtNombre = null!;
         private TextBox txtRif = null!;
-        private TextBox txtSector = null!;
+        private ComboBox cboSector = null!;      // desplegable con sectores predefinidos
+        private TextBox txtSectorOtro = null!;   // texto libre cuando eligen "Otro"
+        private Panel wrapperSectorOtro = null!; // wrapper del textbox "otro" (para mostrar/ocultar el bloque completo)
+        private Label lblSectorOtroCampo = null!; // label "Especifica el sector *" del campo "Otro"
         private NumericUpDown numEmpleados = null!;
         private TextBox txtTelefono = null!;
         private TextBox txtDireccion = null!;
+
+        // Sectores predefinidos (RF: evitar inconsistencias por errores tipográficos
+        // en el nombre del sector — el usuario elige de la lista, o "Otro" + texto).
+        private static readonly string[] SECTORES = new[]
+        {
+            "Desarrollo de software a la medida",
+            "Desarrollo web / aplicaciones web",
+            "Desarrollo móvil (iOS / Android)",
+            "Fintech / Software financiero",
+            "E-commerce / Comercio electrónico",
+            "EdTech / Software educativo",
+            "HealthTech / Software para salud",
+            "Videojuegos",
+            "Software empresarial (ERP, CRM)",
+            "Servicios en la nube / SaaS",
+            "Ciberseguridad",
+            "Inteligencia artificial / Machine learning",
+            "Data / Analytics / Big Data",
+            "DevOps / Infraestructura",
+            "Software embebido / IoT",
+            "Consultoría / Servicios TI",
+            "Otro"
+        };
+        private const string SECTOR_OTRO = "Otro";
 
         // Labels de error (visibles solo si hay error)
         private Label lblErrorNombre = null!;
@@ -292,13 +319,87 @@ namespace MadurezTecnologica.Presentacion
             txtRif.MaxLength = 15;
             RestringirARif(txtRif);
             lblErrorRif = CrearLabelError();
-            yActual = CrearCampo(panelCampos, "🆔  RIF (ej. J-12345678-9)", "*", txtRif, lblErrorRif, yActual);
+            yActual = CrearCampo(panelCampos, "🆔  RIF (ej. J-12345678-9 o J123456789)", "*", txtRif, lblErrorRif, yActual);
 
-            // --- Sector ---
-            txtSector = CrearTextBox();
-            txtSector.MaxLength = 80;
+            // --- Sector (desplegable con opciones predefinidas) ---
+            // Se usa un ComboBox en modo DropDownList para que el usuario NO pueda
+            // escribir libremente (evita "Softwar", "SoftWare", "sofware", etc.).
+            // Si necesita un sector no listado, elige "Otro" y aparece un campo de texto.
+            cboSector = new ComboBox
+            {
+                Font = new Font("Segoe UI", 10),
+                ForeColor = Paleta.TextoOscuro,
+                BackColor = ColorTranslator.FromHtml("#F5F2F8"),
+                FlatStyle = FlatStyle.Flat,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Size = new Size(485, 26)
+            };
+            foreach (var s in SECTORES) cboSector.Items.Add(s);
+
             lblErrorSector = CrearLabelError();
-            yActual = CrearCampo(panelCampos, "💼  Sector / Rubro", "*", txtSector, lblErrorSector, yActual);
+            yActual = CrearCampo(panelCampos, "💼  Sector / Rubro", "*", cboSector, lblErrorSector, yActual);
+
+            // --- Sector "Otro" (aparece solo si eligen "Otro" en el desplegable) ---
+            // Se crea siempre, pero arranca oculto y sin ocupar espacio. Al elegir
+            // "Otro" se muestra y se empujan los campos siguientes hacia abajo.
+            int yAntesSectorOtro = yActual;
+            txtSectorOtro = CrearTextBox();
+            txtSectorOtro.MaxLength = 80;
+
+            // Etiqueta pequeña específica del subcampo
+            lblSectorOtroCampo = new Label
+            {
+                Text = "Especifica el sector",
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                ForeColor = Paleta.TextoOscuro,
+                Location = new Point(16, yActual),
+                AutoSize = true,
+                BackColor = Color.Transparent,
+                Visible = false
+            };
+            var lblSectorOtroAst = new Label
+            {
+                Text = " *",
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(200, 50, 50),
+                Location = new Point(16 + TextRenderer.MeasureText("Especifica el sector", lblSectorOtroCampo.Font).Width, yActual),
+                AutoSize = true,
+                BackColor = Color.Transparent,
+                Visible = false
+            };
+            panelCampos.Controls.Add(lblSectorOtroCampo);
+            panelCampos.Controls.Add(lblSectorOtroAst);
+
+            wrapperSectorOtro = EnvolverEnPanel(txtSectorOtro);
+            wrapperSectorOtro.Location = new Point(5, yActual + 24);
+            wrapperSectorOtro.Visible = false;
+            panelCampos.Controls.Add(wrapperSectorOtro);
+
+            // Altura que ocupa el bloque "Otro" cuando está visible (label + wrapper + margen)
+            int altoBloqueOtro = 24 + wrapperSectorOtro.Height + 16;
+
+            // Toggle del bloque "Otro" según selección del ComboBox
+            cboSector.SelectedIndexChanged += (s, e) =>
+            {
+                bool esOtro = string.Equals(cboSector.SelectedItem as string, SECTOR_OTRO,
+                                            StringComparison.OrdinalIgnoreCase);
+                if (lblSectorOtroCampo.Visible == esOtro) return; // ya está en el estado correcto
+
+                lblSectorOtroCampo.Visible = esOtro;
+                lblSectorOtroAst.Visible = esOtro;
+                wrapperSectorOtro.Visible = esOtro;
+
+                // Recolocar todos los controles que están DEBAJO del bloque "Otro":
+                // se mueven altoBloqueOtro px hacia abajo si aparece, hacia arriba si desaparece.
+                int delta = esOtro ? altoBloqueOtro : -altoBloqueOtro;
+                foreach (Control c in panelCampos.Controls)
+                {
+                    // Los que ya estaban por encima del bloque "Otro" no se tocan
+                    if (c == lblSectorOtroCampo || c == lblSectorOtroAst || c == wrapperSectorOtro) continue;
+                    if (c.Top >= yAntesSectorOtro)
+                        c.Top += delta;
+                }
+            };
 
             // --- Empleados ---
             numEmpleados = new NumericUpDown
@@ -459,9 +560,10 @@ namespace MadurezTecnologica.Presentacion
                 padre.Controls.Add(lblAsterisco);
             }
 
-            // Envolver el input en panel con bordes redondeados (excepto NumericUpDown que tiene su propio render)
+            // Envolver el input en panel con bordes redondeados (TextBox y ComboBox se
+            // envuelven; NumericUpDown queda como está porque tiene su propio render).
             Control elementoVisual;
-            if (input is TextBox)
+            if (input is TextBox || input is ComboBox)
             {
                 elementoVisual = EnvolverEnPanel(input);
             }
@@ -531,10 +633,46 @@ namespace MadurezTecnologica.Presentacion
 
             txtNombre.Text = _empresaExistente.Nombre;
             txtRif.Text = _empresaExistente.Rif;
-            txtSector.Text = _empresaExistente.Sector;
+
+            // Sector: buscar coincidencia en la lista. Si el valor guardado NO está
+            // en la lista (empresa creada antes del cambio a ComboBox), lo agregamos
+            // temporalmente al desplegable y lo seleccionamos, para no perder el dato.
+            // Si el usuario cambia a otra opción o a "Otro", el valor viejo desaparece.
+            string sectorGuardado = _empresaExistente.Sector ?? "";
+            int idx = -1;
+            for (int i = 0; i < cboSector.Items.Count; i++)
+            {
+                if (string.Equals(cboSector.Items[i] as string, sectorGuardado,
+                                  StringComparison.OrdinalIgnoreCase))
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx >= 0)
+            {
+                cboSector.SelectedIndex = idx;
+            }
+            else if (!string.IsNullOrWhiteSpace(sectorGuardado))
+            {
+                // Insertar al principio para que se vea claro que es el valor previo
+                cboSector.Items.Insert(0, sectorGuardado);
+                cboSector.SelectedIndex = 0;
+            }
+
             numEmpleados.Value = Math.Max(1, _empresaExistente.CantidadEmpleados);
             txtTelefono.Text = _empresaExistente.Telefono ?? "";
             txtDireccion.Text = _empresaExistente.Direccion ?? "";
+        }
+
+        // Devuelve el sector seleccionado. Si el usuario eligió "Otro", devuelve el
+        // texto que escribió en el campo secundario; si no, la opción del ComboBox.
+        private string ObtenerSectorSeleccionado()
+        {
+            string sel = cboSector.SelectedItem as string ?? "";
+            if (string.Equals(sel, SECTOR_OTRO, StringComparison.OrdinalIgnoreCase))
+                return txtSectorOtro.Text.Trim();
+            return sel;
         }
 
         // =====================================================
@@ -550,7 +688,7 @@ namespace MadurezTecnologica.Presentacion
 
                 empresa.Nombre = txtNombre.Text.Trim();
                 empresa.Rif = txtRif.Text.Trim();
-                empresa.Sector = txtSector.Text.Trim();
+                empresa.Sector = ObtenerSectorSeleccionado();
                 empresa.CantidadEmpleados = (int)numEmpleados.Value;
                 empresa.Telefono = txtTelefono.Text.Trim();
                 empresa.Direccion = txtDireccion.Text.Trim();
@@ -606,15 +744,23 @@ namespace MadurezTecnologica.Presentacion
             }
 
             // --- RIF ---
+            // El SENIAT ya no exige guiones — se aceptan ambos formatos:
+            //   Tradicional: J-12345678-9   (letra + 8 dígitos + guión + 1 dígito)
+            //   Sin guiones: J123456789     (letra + 9 dígitos seguidos)
+            //   También: J-123456789 o J 12345678 9 (variaciones intermedias)
+            // Se normaliza quitando guiones y espacios, y se valida contra el patrón
+            // final: letra {J,V,E,G,P} + 9 o 10 dígitos.
             string rif = txtRif.Text.Trim();
+            string rifNormalizado = System.Text.RegularExpressions.Regex.Replace(rif, @"[\s\-]", "").ToUpperInvariant();
+
             if (string.IsNullOrEmpty(rif))
             {
                 MostrarError(lblErrorRif, "El RIF es obligatorio.");
                 valido = false;
             }
-            else if (!System.Text.RegularExpressions.Regex.IsMatch(rif, @"^[JVEGP]-\d{8,9}-\d$"))
+            else if (!System.Text.RegularExpressions.Regex.IsMatch(rifNormalizado, @"^[JVEGP]\d{9,10}$"))
             {
-                MostrarError(lblErrorRif, "Formato inválido. Usa el formato J-12345678-9.");
+                MostrarError(lblErrorRif, "Formato inválido. Debe empezar con J, V, E, G o P seguido de 9 o 10 dígitos (con o sin guiones).");
                 valido = false;
             }
             else
@@ -628,16 +774,27 @@ namespace MadurezTecnologica.Presentacion
             }
 
             // --- Sector ---
-            string sector = txtSector.Text.Trim();
-            if (string.IsNullOrEmpty(sector))
+            // El usuario debe elegir una opción del desplegable. Si eligió "Otro",
+            // adicionalmente debe llenar el campo de texto libre.
+            if (cboSector.SelectedItem == null)
             {
-                MostrarError(lblErrorSector, "El sector es obligatorio.");
+                MostrarError(lblErrorSector, "Selecciona un sector de la lista.");
                 valido = false;
             }
-            else if (sector.Length < 3)
+            else if (string.Equals(cboSector.SelectedItem as string, SECTOR_OTRO,
+                                   StringComparison.OrdinalIgnoreCase))
             {
-                MostrarError(lblErrorSector, "El sector debe tener al menos 3 caracteres.");
-                valido = false;
+                string otro = txtSectorOtro.Text.Trim();
+                if (string.IsNullOrEmpty(otro))
+                {
+                    MostrarError(lblErrorSector, "Especifica el sector en el campo de abajo.");
+                    valido = false;
+                }
+                else if (otro.Length < 3)
+                {
+                    MostrarError(lblErrorSector, "El sector debe tener al menos 3 caracteres.");
+                    valido = false;
+                }
             }
 
             // --- Empleados ---

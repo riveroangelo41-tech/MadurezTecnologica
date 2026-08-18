@@ -100,6 +100,75 @@ namespace MadurezTecnologica.Logica
             }
         }
 
+        // Verifica con la IA que el TEMA del informe corresponde al sector registrado
+        // de la empresa. Distinto de ValidarCoherenciaPDF, que valida nombre. Este
+        // valida encaje temático (evita analizar un PDF de "Software empresarial" bajo
+        // una empresa registrada como "Videojuegos").
+        // Devuelve: (esCoherente, sectorDetectado). Si esCoherente=true, sectorDetectado es "".
+        public async Task<(bool esCoherente, string sectorDetectado)> ValidarSectorPDF(
+            string textoInforme, Empresa empresa, CancellationToken ct = default)
+        {
+            try
+            {
+                string prompt = _constructorPrompt.PromptValidacionSector(textoInforme, empresa.Sector ?? "");
+                string respuesta = await _clienteIA.EnviarMensaje(prompt, null, ct);
+                string norm = respuesta.Trim().ToUpper();
+
+                if (norm.StartsWith("SI") || norm.StartsWith("SÍ"))
+                    return (true, "");
+
+                // NO — intentar extraer el sector detectado (línea "Sector detectado: X")
+                string sectorDetectado = "";
+                var lineas = respuesta.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var linea in lineas)
+                {
+                    string l = linea.Trim();
+                    int idx = l.IndexOf("Sector detectado:", StringComparison.OrdinalIgnoreCase);
+                    if (idx >= 0)
+                    {
+                        sectorDetectado = l.Substring(idx + "Sector detectado:".Length).Trim();
+                        break;
+                    }
+                }
+                return (false, sectorDetectado);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (VpnRequeridaException) { throw; }
+            catch
+            {
+                // Si falla la validación, ser tolerante — no bloqueamos el análisis
+                // por errores infra (la validación es una capa adicional, no crítica).
+                return (true, "");
+            }
+        }
+
+        // Pregunta a la IA cuántos empleados menciona el informe. Devuelve el número
+        // detectado, o -1 si no se puede determinar / la llamada falla.
+        // Se usa para comparar con el registrado en la empresa y detectar inconsistencias
+        // (RF derivado de corrección del tutor: cantidad de empleados debe encajar).
+        public async Task<int> DetectarEmpleadosPDF(string textoInforme, CancellationToken ct = default)
+        {
+            try
+            {
+                string prompt = _constructorPrompt.PromptDetectarEmpleados(textoInforme);
+                string respuesta = await _clienteIA.EnviarMensaje(prompt, null, ct);
+                string norm = respuesta.Trim();
+
+                // Extraer el primer número entero (con signo opcional) que aparezca
+                var match = System.Text.RegularExpressions.Regex.Match(norm, @"-?\d+");
+                if (!match.Success) return -1;
+                if (!int.TryParse(match.Value, out int n)) return -1;
+                return n;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (VpnRequeridaException) { throw; }
+            catch
+            {
+                // Si falla la detección, ser tolerante — no bloqueamos el análisis
+                return -1;
+            }
+        }
+
         // Realiza el diagnóstico completo utilizando Claude, devuelve el diagnóstico estructurado y el texto crudo de la respuesta
         public async Task<(Diagnostico diagnostico, string textoCrudo)> RealizarDiagnostico(string textoInforme, Empresa empresa, CancellationToken ct = default)
         {
