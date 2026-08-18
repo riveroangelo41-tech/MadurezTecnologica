@@ -67,6 +67,8 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.7" />
     <PackageReference Include="NPOI" Version="2.8.0" />
     <PackageReference Include="PdfPig" Version="0.1.14" />
+    <!-- Generación de PDFs (dashboard de Resultados). MIT license. -->
+    <PackageReference Include="PDFsharp" Version="6.1.1" />
   </ItemGroup>
 
   <ItemGroup>

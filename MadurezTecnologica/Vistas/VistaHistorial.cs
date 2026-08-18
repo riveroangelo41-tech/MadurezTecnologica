@@ -452,6 +452,74 @@ namespace MadurezTecnologica.Vistas
                                                .OrderBy(d => d.FechaGeneracion)
                                                .ToList();
 
+            // === EXPORTAR COMO PDF (formato principal) ===
+            // El PDF es un reporte formal multi-página: portada con datos de empresa
+            // y un diagnóstico por sección con nivel CMMI, resumen, fortalezas,
+            // debilidades, riesgos y recomendaciones.
+            var dialogPdf = new SaveFileDialog
+            {
+                Title = "Exportar historial de diagnósticos como PDF",
+                Filter = "Archivo PDF (*.pdf)|*.pdf|Archivo de texto (*.txt)|*.txt",
+                FileName = $"Historial_{empresa.Nombre.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd}",
+                DefaultExt = "pdf",
+                AddExtension = true,
+                OverwritePrompt = true,
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+            };
+
+            if (dialogPdf.ShowDialog() != DialogResult.OK) return;
+
+            // Decidir formato según extensión elegida en el diálogo
+            bool esPdf = dialogPdf.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+
+            if (esPdf)
+            {
+                try
+                {
+                    Cursor previoCursor = this.Cursor;
+                    this.Cursor = Cursors.WaitCursor;
+                    try
+                    {
+                        Logica.GeneradorPdfHistorial.Generar(empresa, conv, diagnosticos, dialogPdf.FileName);
+                    }
+                    finally
+                    {
+                        this.Cursor = previoCursor;
+                    }
+
+                    var abrir = MessageBox.Show(
+                        this.FindForm(),
+                        $"PDF guardado en:\n{dialogPdf.FileName}\n\n¿Deseas abrirlo ahora?",
+                        "Exportación completada",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Information);
+
+                    if (abrir == DialogResult.Yes)
+                    {
+                        try
+                        {
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                            {
+                                FileName = dialogPdf.FileName,
+                                UseShellExecute = true
+                            });
+                        }
+                        catch { /* si no hay app asociada, el archivo ya está guardado */ }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(
+                        this.FindForm(),
+                        $"No se pudo generar el PDF:\n\n{ex.Message}",
+                        "Error al generar PDF",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                }
+                return;
+            }
+
+            // === Fallback: exportar como TXT (formato legado, si el usuario elige .txt) ===
             var sb = new StringBuilder();
             sb.AppendLine("══════════════════════════════════════════════════════════════");
             sb.AppendLine("       REPORTE DE MADUREZ TECNOLÓGICA");
@@ -518,21 +586,24 @@ namespace MadurezTecnologica.Vistas
             sb.AppendLine("  Generado por: Sistema de Madurez Tecnológica para PYMES");
             sb.AppendLine($"  Exportado: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
 
-            var dialog = new SaveFileDialog
+            // El usuario ya eligió una ruta .txt en el diálogo del principio de este
+            // método, así que aquí solo escribimos el archivo con el texto generado.
+            try
             {
-                Title = "Exportar historial de diagnósticos",
-                Filter = "Archivo de texto (*.txt)|*.txt",
-                FileName = $"Reporte_{empresa.Nombre.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd}",
-                DefaultExt = "txt"
-            };
-
-            if (dialog.ShowDialog() == DialogResult.OK)
-            {
-                File.WriteAllText(dialog.FileName, sb.ToString(), Encoding.UTF8);
+                File.WriteAllText(dialogPdf.FileName, sb.ToString(), Encoding.UTF8);
                 Estilos.MensajeApp.Exito(
-                    $"Reporte exportado exitosamente.\n\n📁 {dialog.FileName}",
+                    $"Reporte exportado exitosamente.\n\n📁 {dialogPdf.FileName}",
                     "Exportación completada",
                     this.FindForm());
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    this.FindForm(),
+                    $"No se pudo guardar el archivo:\n\n{ex.Message}",
+                    "Error al exportar",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
 

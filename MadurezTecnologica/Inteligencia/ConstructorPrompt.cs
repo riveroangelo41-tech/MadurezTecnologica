@@ -93,6 +93,12 @@ ESTRUCTURA OBLIGATORIA DE LA RESPUESTA (sigue exactamente este formato):
 - [Pregunta 1]
 - [Pregunta 2]
 
+8. MARCOS DE REFERENCIA APLICADOS:
+[Lista breve (una línea por marco) de los marcos que USASTE EXPLÍCITAMENTE en este análisis y por qué. Solo menciona los que realmente aplicaste — si un marco no fue relevante para este informe, NO lo incluyas. Formato: ""- [Nombre del marco]: [1-2 líneas de justificación específica de por qué aplicó a este caso]"". Ejemplo válido: ""- CMMI: se usó para determinar el nivel de madurez de procesos (secciones 4 y 7 del informe)"". Ejemplo válido: ""- ISO/IEC 25010: no se aplicó porque el informe no describe atributos de calidad del producto"".]
+
+9. CRITERIO PARA DETERMINAR EL NIVEL CMMI:
+[Explicación BREVE (3 a 5 líneas máximo) del criterio concreto que usaste para asignar el nivel CMMI de la sección 2. Menciona las evidencias específicas del informe que soportan el nivel elegido y por qué NO se asignó un nivel inmediatamente superior o inferior. Sé directo y técnico, sin relleno.]
+
 Sé específico, justificado y técnico. Si el informe es insuficiente, indícalo en la sección correspondiente en lugar de inventar conclusiones.";
         }
 

@@ -77,11 +77,12 @@ namespace MadurezTecnologica.Logica
                 FechaAnalisis = DateTime.Now
             };
 
-            // Enlazar la cancelación del usuario con la del monitor de conexión: si la red
-            // se cae a mitad del análisis, este token se cancela y aborta la petición a la IA.
-            using var ctsEnlazado = CancellationTokenSource.CreateLinkedTokenSource(
-                ct, Inteligencia.DetectorConexion.TokenConexion);
-            ct = ctsEnlazado.Token;
+            // NOTA: NO enlazamos aquí con TokenConexion. Ese token queda CANCELADO
+            // mientras el monitor detecta la caída de red — enlazarlo desde el inicio
+            // haría que el análisis offline nunca arranque (todos los ThrowIfCancellationRequested
+            // se dispararían en el primer paso). Enlazamos más abajo, SOLO en el flujo online.
+            // El ct original (del usuario, via botón cancelar del diálogo) sigue vivo.
+            CancellationTokenSource? ctsEnlazado = null;
 
             try
             {
@@ -122,6 +123,14 @@ namespace MadurezTecnologica.Logica
                     return EjecutarAnalisisOffline(textoInforme, rutaPdf, empresa, resultado, modo,
                         ignorarValidacionSector, ignorarValidacionRif);
                 }
+
+                // === Ya sabemos que vamos a hacer peticiones HTTP a la IA (flujo online) ===
+                // Enlazar la cancelación del usuario con la del monitor de conexión: si
+                // la red se cae a mitad del análisis, TokenConexion se cancela y aborta
+                // las peticiones HTTP en curso (validación de sector, diagnóstico, etc.).
+                ctsEnlazado = CancellationTokenSource.CreateLinkedTokenSource(
+                    ct, Inteligencia.DetectorConexion.TokenConexion);
+                ct = ctsEnlazado.Token;
 
                 // === FLUJO ONLINE ===
 
@@ -233,6 +242,11 @@ namespace MadurezTecnologica.Logica
                 resultado.Exitoso = false;
                 resultado.Mensaje = $"Error durante el análisis: {ex.Message}";
                 return resultado;
+            }
+            finally
+            {
+                // Liberar el CTS enlazado (solo se creó si entramos al flujo online).
+                ctsEnlazado?.Dispose();
             }
         }
 

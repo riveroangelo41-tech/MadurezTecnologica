@@ -362,20 +362,26 @@ namespace MadurezTecnologica.Logica
             if (!_repoConversacion.Existe(conversacionId))
                 throw new ArgumentException($"La conversación con ID {conversacionId} no existe.");
 
-            // Enlazar la cancelación con el token de conexión: si la red se cae a mitad
-            // del streaming, este token se cancela y aborta la respuesta de la IA.
-            using var ctsEnlazado = CancellationTokenSource.CreateLinkedTokenSource(
-                ct, DetectorConexion.TokenConexion);
-            ct = ctsEnlazado.Token;
-
             // === RAMA OFFLINE — responder con MotorChatOffline ===
-            // (forzado por el usuario O sin conexión detectada por el monitor)
+            // (forzado por el usuario O sin conexión detectada por el monitor).
+            // IMPORTANTE: aquí NO enlazamos con TokenConexion. Cuando el monitor
+            // detecta la pérdida de red, TokenConexion queda cancelado hasta que
+            // vuelva la conexión — enlazarlo aquí haría que el streaming offline
+            // naciera ya cancelado y nunca emitiera ningún chunk (dejando el chat
+            // atascado en "Escribiendo..." indefinidamente).
             if (DetectorConexion.EstaOffline())
             {
                 await foreach (var chunk in EnviarMensajeOfflineStream(conversacionId, textoUsuario, ct))
                     yield return chunk;
                 yield break;
             }
+
+            // Enlazar la cancelación con el token de conexión: si la red se cae a mitad
+            // del streaming ONLINE, este token se cancela y aborta la respuesta de la IA.
+            // Solo aplica al flujo online (petición HTTP a Claude que se pueda abortar).
+            using var ctsEnlazado = CancellationTokenSource.CreateLinkedTokenSource(
+                ct, DetectorConexion.TokenConexion);
+            ct = ctsEnlazado.Token;
 
             // Cargar historial
             var historial = CargarHistorial(conversacionId);

@@ -16,6 +16,9 @@ namespace MadurezTecnologica.Vistas
         private Panel panelHeader = null!;
         private Estilos.IndicadorModoConexion _indicadorConexion = null!;
         private Panel panelContenido = null!;
+        // Botón "Descargar PDF" del header: captura el dashboard actual como imagen
+        // y genera un PDF A4 vertical de 1 página.
+        private Panel _btnDescargarPdf = null!;
 
         // Header
         private Label lblTitulo = null!;
@@ -211,15 +214,133 @@ namespace MadurezTecnologica.Vistas
             };
             panelHeader.Controls.Add(_indicadorConexion);
 
-            panelHeader.Resize += (s, e) =>
+            // === BOTÓN "DESCARGAR PDF" ===
+            // Panel personalizado con fondo morado, esquinas redondeadas y hover.
+            // Se ubica a la izquierda del IndicadorModoConexion (que ya va a la derecha).
+            _btnDescargarPdf = new Panel
             {
-                if (_indicadorConexion != null)
-                    _indicadorConexion.Location = new Point(
-                        panelHeader.Width - _indicadorConexion.Width - 20, 25);
+                Size = new Size(170, 36),
+                BackColor = Paleta.MoradoOscuro,
+                Cursor = Cursors.Hand
             };
-            if (_indicadorConexion != null)
+            _btnDescargarPdf.Resize += (s, e) =>
+                Paleta.AplicarBordeRedondeadoSuave(_btnDescargarPdf, 18);
+            Paleta.AplicarBordeRedondeadoSuave(_btnDescargarPdf, 18);
+
+            var lblBtnPdf = new Label
+            {
+                Text = "⬇  Descargar PDF",
+                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                ForeColor = Color.White,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+            _btnDescargarPdf.Controls.Add(lblBtnPdf);
+            panelHeader.Controls.Add(_btnDescargarPdf);
+
+            // Hover: aclara el fondo cuando el mouse entra
+            _btnDescargarPdf.MouseEnter += (s, e) => _btnDescargarPdf.BackColor = Paleta.MoradoOscuroHover;
+            _btnDescargarPdf.MouseLeave += (s, e) => _btnDescargarPdf.BackColor = Paleta.MoradoOscuro;
+            lblBtnPdf.MouseEnter += (s, e) => _btnDescargarPdf.BackColor = Paleta.MoradoOscuroHover;
+            lblBtnPdf.MouseLeave += (s, e) => _btnDescargarPdf.BackColor = Paleta.MoradoOscuro;
+
+            // Click → generar PDF
+            EventHandler descargarClick = (s, e) => OnDescargarPdfClick();
+            _btnDescargarPdf.Click += descargarClick;
+            lblBtnPdf.Click += descargarClick;
+
+            // Recolocación al redimensionar: indicador a la derecha, botón PDF a la
+            // izquierda del indicador (con 10 px de gap).
+            void RecolocarBotonesHeader()
+            {
+                if (_indicadorConexion == null || _btnDescargarPdf == null) return;
                 _indicadorConexion.Location = new Point(
                     panelHeader.Width - _indicadorConexion.Width - 20, 25);
+                _btnDescargarPdf.Location = new Point(
+                    _indicadorConexion.Left - _btnDescargarPdf.Width - 10, 25);
+            }
+            panelHeader.Resize += (s, e) => RecolocarBotonesHeader();
+            RecolocarBotonesHeader();
+        }
+
+        // Handler del botón "Descargar PDF": pide ruta con SaveFileDialog y llama al
+        // generador. Muestra feedback (mensaje de éxito con opción de abrir el PDF,
+        // o error si algo falla). Deshabilita el botón durante la generación para
+        // evitar clics dobles que abrirían dos diálogos.
+        private void OnDescargarPdfClick()
+        {
+            if (!_btnDescargarPdf.Enabled) return;
+
+            // Nombre sugerido con fecha para no pisar archivos previos
+            string nombreDefault = $"Resultados_{DateTime.Now:yyyyMMdd_HHmm}.pdf";
+
+            using var dlg = new SaveFileDialog
+            {
+                Title = "Guardar reporte de resultados como PDF",
+                Filter = "Archivos PDF (*.pdf)|*.pdf",
+                FileName = nombreDefault,
+                DefaultExt = "pdf",
+                AddExtension = true,
+                OverwritePrompt = true,
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+            };
+            if (dlg.ShowDialog(this.FindForm()) != DialogResult.OK) return;
+
+            _btnDescargarPdf.Enabled = false;
+            Cursor previoCursor = this.Cursor;
+            this.Cursor = Cursors.WaitCursor;
+
+            try
+            {
+                // Se captura el panelDashboard (el que tiene AutoScroll y contiene TODAS
+                // las secciones del dashboard: KPIs, gráficos, sectores, actividad, áreas
+                // críticas, etc.). Al pasar el panel con scroll, el generador toma la
+                // captura completa (contenido total, no solo lo visible en el viewport).
+                Logica.GeneradorPdfResultados.Generar(
+                    panelDashboard,
+                    dlg.FileName,
+                    "Dashboard de Resultados de Madurez Tecnológica");
+
+                var abrir = MessageBox.Show(
+                    this.FindForm(),
+                    $"PDF guardado en:\n{dlg.FileName}\n\n¿Deseas abrirlo ahora?",
+                    "Descarga completada",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+
+                if (abrir == DialogResult.Yes)
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = dlg.FileName,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch
+                    {
+                        // Si no hay app asociada a .pdf, no rompemos — el archivo ya
+                        // está guardado y el usuario puede abrirlo manualmente.
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    this.FindForm(),
+                    $"No se pudo generar el PDF:\n\n{ex.Message}",
+                    "Error al generar PDF",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+            finally
+            {
+                this.Cursor = previoCursor;
+                _btnDescargarPdf.Enabled = true;
+            }
         }
 
         // ===================================================
